@@ -8,7 +8,8 @@ interface PathInfo {
 export const renderPaths = (value: unknown, bodyBytes: number): string => {
     const cfg = getConfig()
     const paths = new Map<string, PathInfo>()
-    walk(value, '', paths, 0, cfg.schemaMaxDepth)
+    const overflows: string[] = []
+    walk(value, '', paths, overflows, 0, cfg.schemaMaxDepth)
 
     const ordered = [...paths.entries()]
     const longest = ordered.reduce((m, [k]) => Math.max(m, k.length), 0)
@@ -19,6 +20,7 @@ export const renderPaths = (value: unknown, bodyBytes: number): string => {
         const example = info.example ? ' (e.g. ' + info.example + ')' : ''
         lines.push(path.padEnd(longest) + ' : ' + types + example)
     }
+    for (const o of overflows) lines.push('# ' + o)
 
     const footer = renderFooter(value, bodyBytes)
     return lines.length ? lines.join('\n') + '\n\n' + footer : footer
@@ -28,6 +30,7 @@ const walk = (
     value: unknown,
     path: string,
     out: Map<string, PathInfo>,
+    overflows: string[],
     depth: number,
     max: number,
 ): void => {
@@ -61,12 +64,12 @@ const walk = (
             addLeaf(out, path + '[]', '<empty>')
             return
         }
-        for (const item of value) walk(item, path + '[]', out, depth + 1, max)
+        for (const item of value) walk(item, path + '[]', out, overflows, depth + 1, max)
         return
     }
     if (typeof value === 'object') {
         const cfg = getConfig()
-        const keys = Object.keys(value)
+        const keys = Object.keys(value).sort()
         const limit = cfg.schemaMaxObjectKeys
         const visible = keys.slice(0, limit)
         for (const k of visible) {
@@ -74,12 +77,13 @@ const walk = (
                 (value as Record<string, unknown>)[k],
                 path ? path + '.' + k : k,
                 out,
+                overflows,
                 depth + 1,
                 max,
             )
         }
         if (keys.length > limit) {
-            addLeaf(out, path + '.<...>', keys.length - limit + ' more keys')
+            overflows.push(keys.length - limit + ' more keys')
         }
     }
 }

@@ -39,7 +39,7 @@ const renderNode = (value: unknown, depth: number, max: number): string => {
 
 const renderObject = (obj: Record<string, unknown>, depth: number, max: number): string => {
     const cfg = getConfig()
-    const keys = Object.keys(obj)
+    const keys = Object.keys(obj).sort()
     const limit = cfg.schemaMaxObjectKeys
     const visible = keys.slice(0, limit)
     const fields = visible.map((k) => k + ': ' + renderNode(obj[k], depth + 1, max)).join(', ')
@@ -61,6 +61,7 @@ const mergeObjects = (items: Record<string, unknown>[], depth: number, max: numb
     }
     const cfg = getConfig()
     const limit = cfg.schemaMaxObjectKeys
+    allKeys.sort()
     const visible = allKeys.slice(0, limit)
     const fields: string[] = []
     for (const k of visible) {

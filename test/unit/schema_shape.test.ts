@@ -12,7 +12,8 @@ describe('renderShape', () => {
         expect(out).toMatch(/name: string/)
         expect(out).toMatch(/roles: string\[\]/)
         expect(out).toMatch(/profile: \{ bio: string\|null \}/)
-        expect(out).toMatch(/meta: \{ total: int, next_cursor: string \}/)
+        expect(out).toMatch(/meta: \{[^}]*total: int[^}]*\}/)
+        expect(out).toMatch(/meta: \{[^}]*next_cursor: string[^}]*\}/)
         expect(out).toContain('# 1.2 KB')
     })
 
