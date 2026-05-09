@@ -25,8 +25,16 @@ export interface MultipartInput {
     fields?: Record<string, string>
     files?: Record<string, MultipartFile>
 }
-export interface MultipartFile {
+export type MultipartFile = MultipartFilePath | MultipartFileInline
+
+export interface MultipartFilePath {
     path: string
+    filename?: string
+    content_type?: string
+}
+
+export interface MultipartFileInline {
+    content_base64: string
     filename?: string
     content_type?: string
 }

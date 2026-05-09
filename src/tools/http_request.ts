@@ -3,7 +3,9 @@ import type { Cache } from '../core/cache.js'
 import { makeError } from '../core/errors.js'
 import { type HttpRunResult, performHttp } from '../core/http.js'
 import { ensureUnderRoot } from '../core/paths.js'
+import { inferNextStepHints } from '../core/schema/hints.js'
 import { renderNonJsonDescriptor, renderSchema } from '../core/schema/index.js'
+import { renderJsonPreview, renderTextPreview } from '../core/schema/preview.js'
 import type {
     BodyInclusion,
     BodyKind,
@@ -48,6 +50,10 @@ export const httpRequestTool = async (
     }
     if (params.multipart?.files) {
         for (const [key, file] of Object.entries(params.multipart.files)) {
+            // content_base64 inline files have no path to canonicalise; skip
+            // the FILES_ROOT check (this is the documented behaviour for
+            // remote-MCP scenarios where path semantics don't make sense).
+            if (!('path' in file)) continue
             const err = ensureUnderRoot(file.path, filesRoot, 'multipart.files.' + key + '.path')
             if (err) return err
         }
@@ -114,12 +120,26 @@ export const httpRequestTool = async (
     }
     cache.put(entry)
 
+    const cfg = getConfig()
     const result: HttpRequestResult = {
         cache_id,
         status: runResult.status,
         meta,
         schema,
         ...(resolution.resolved_mode === 'inline' ? { body: runResult.parsedBody } : {}),
+        ...(resolution.resolved_mode === 'head' && runResult.body_kind === 'json'
+            ? { body_preview: renderJsonPreview(runResult.parsedBody, cfg) }
+            : {}),
+        ...(resolution.resolved_mode === 'head' && runResult.body_kind === 'text'
+            ? { body_preview: renderTextPreview(runResult.parsedBody as string, cfg) }
+            : {}),
+        ...(resolution.resolved_mode === 'head' && runResult.body_kind === 'empty'
+            ? { body_preview: null }
+            : {}),
+    }
+    if (runResult.body_kind === 'json') {
+        const hints = inferNextStepHints(runResult.parsedBody)
+        if (hints.length > 0) result.next_step_hints = hints
     }
     return result
 }
