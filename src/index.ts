@@ -18,7 +18,7 @@ export const createServer = () => {
           '.'
         : ''
     const server = new Server(
-        { name: 'rest-magpie', version: '0.1.1' },
+        { name: 'rest-magpie', version: '0.1.2' },
         { capabilities: { tools: {} } },
     )
 
