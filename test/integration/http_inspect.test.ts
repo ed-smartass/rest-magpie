@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Cache } from '../../src/core/cache.js'
-import { httpInspectTool } from '../../src/tools/http_inspect.js'
 import { isError } from '../../src/core/errors.js'
+import { httpInspectTool } from '../../src/tools/http_inspect.js'
 import type { CacheEntry } from '../../src/types.js'
 
 const makeEntry = (cache: Cache, body: unknown): string => {
