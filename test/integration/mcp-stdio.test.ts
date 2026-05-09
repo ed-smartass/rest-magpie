@@ -110,6 +110,7 @@ describe('MCP stdio black-box smoke', () => {
             'http_inspect',
             'http_read',
             'http_request',
+            'server_info',
         ])
 
         const call = messages.find((m) => m.id === 3)

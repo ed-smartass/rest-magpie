@@ -2,7 +2,8 @@ import { randomBytes } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { basename } from 'node:path'
 import { Readable } from 'node:stream'
-import type { MultipartInput } from '../types.js'
+import { getConfig } from '../config.js'
+import type { MultipartFile, MultipartInput } from '../types.js'
 
 export interface BuiltMultipart {
     body: Readable
@@ -32,35 +33,113 @@ interface PreparedField {
     safeName: string
     value: string
 }
-interface PreparedFile {
-    safeName: string
-    safeFilename: string
-    safeCt: string
-    path: string
+type PreparedFile =
+    | {
+          source: 'path'
+          safeName: string
+          safeFilename: string
+          safeCt: string
+          path: string
+      }
+    | {
+          source: 'inline'
+          safeName: string
+          safeFilename: string
+          safeCt: string
+          buffer: Buffer
+      }
+
+const isInlineFile = (f: MultipartFile): f is Extract<MultipartFile, { content_base64: string }> =>
+    'content_base64' in f
+
+const decodeBase64 = (s: string, where: string, capBytes: number): Buffer => {
+    let buf: Buffer
+    try {
+        buf = Buffer.from(s, 'base64')
+    } catch {
+        const e = new Error('invalid_input: ' + where + ' is not valid base64')
+        ;(e as { kind?: string }).kind = 'invalid_input'
+        throw e
+    }
+    if (buf.length > capBytes) {
+        const e = new Error(
+            'invalid_input: ' +
+                where +
+                ' decoded size ' +
+                buf.length +
+                ' B exceeds MAGPIE_MAX_INLINE_FILE_BYTES (' +
+                capBytes +
+                ' B). Use multipart.files[].path with a volume mount instead, or raise the cap.',
+        )
+        ;(e as { kind?: string }).kind = 'invalid_input'
+        throw e
+    }
+    return buf
 }
 
 export const buildMultipart = (mp: MultipartInput): BuiltMultipart => {
     const boundary = '----magpie' + randomBytes(12).toString('hex')
+    const cfg = getConfig()
 
     // Validate and sanitise every header-position string EAGERLY so a
     // malicious input fails the call before any HTTP request is started.
-    // Doing this only inside the async generator means the throw fires
-    // during stream consumption, which is too late for callers and
-    // surprises tests that just call buildMultipart().
     const fields: PreparedField[] = []
     for (const [k, v] of Object.entries(mp.fields ?? {})) {
         fields.push({ safeName: quoteFieldValue(k, 'multipart.fields key'), value: v })
     }
     const files: PreparedFile[] = []
     for (const [k, f] of Object.entries(mp.files ?? {})) {
-        const filename = f.filename ?? basename(f.path)
+        // Validate that exactly one of path / content_base64 is supplied.
+        const hasPath = 'path' in f && typeof f.path === 'string'
+        const hasInline = isInlineFile(f)
+        if (hasPath && hasInline) {
+            const e = new Error(
+                'invalid_input: multipart.files.' +
+                    k +
+                    ' must specify exactly one of path or content_base64 (both supplied)',
+            )
+            ;(e as { kind?: string }).kind = 'invalid_input'
+            throw e
+        }
+        if (!hasPath && !hasInline) {
+            const e = new Error(
+                'invalid_input: multipart.files.' +
+                    k +
+                    ' must specify exactly one of path or content_base64',
+            )
+            ;(e as { kind?: string }).kind = 'invalid_input'
+            throw e
+        }
+
         const ct = f.content_type ?? 'application/octet-stream'
-        files.push({
-            safeName: quoteFieldValue(k, 'multipart.files key'),
-            safeFilename: quoteFieldValue(filename, 'multipart.files.' + k + '.filename'),
-            safeCt: sanitizeHeaderValue(ct, 'multipart.files.' + k + '.content_type'),
-            path: f.path,
-        })
+        const safeName = quoteFieldValue(k, 'multipart.files key')
+        const safeCt = sanitizeHeaderValue(ct, 'multipart.files.' + k + '.content_type')
+
+        if (hasInline) {
+            const filename = f.filename ?? 'upload.bin'
+            const buffer = decodeBase64(
+                f.content_base64,
+                'multipart.files.' + k + '.content_base64',
+                cfg.maxInlineFileBytes,
+            )
+            files.push({
+                source: 'inline',
+                safeName,
+                safeFilename: quoteFieldValue(filename, 'multipart.files.' + k + '.filename'),
+                safeCt,
+                buffer,
+            })
+        } else {
+            const pathFile = f as Extract<MultipartFile, { path: string }>
+            const filename = pathFile.filename ?? basename(pathFile.path)
+            files.push({
+                source: 'path',
+                safeName,
+                safeFilename: quoteFieldValue(filename, 'multipart.files.' + k + '.filename'),
+                safeCt,
+                path: pathFile.path,
+            })
+        }
     }
 
     async function* gen(): AsyncGenerator<Buffer> {
@@ -90,8 +169,12 @@ export const buildMultipart = (mp: MultipartInput): BuiltMultipart => {
                     f.safeCt +
                     '\r\n\r\n',
             )
-            for await (const chunk of createReadStream(f.path)) {
-                yield chunk as Buffer
+            if (f.source === 'path') {
+                for await (const chunk of createReadStream(f.path)) {
+                    yield chunk as Buffer
+                }
+            } else {
+                yield f.buffer
             }
             yield Buffer.from('\r\n')
         }

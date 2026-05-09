@@ -8,6 +8,7 @@ import { Cache } from './core/cache.js'
 import { httpInspectTool } from './tools/http_inspect.js'
 import { httpReadTool } from './tools/http_read.js'
 import { httpRequestTool } from './tools/http_request.js'
+import { serverInfoTool } from './tools/server_info.js'
 
 // Replaced by tsup at build time (see tsup.config.ts `define`). Falls back to
 // process.env.npm_package_version when running under npm scripts (tests).
@@ -47,6 +48,11 @@ export const createServer = () => {
                 description: HTTP_INSPECT_DESC,
                 inputSchema: HTTP_INSPECT_SCHEMA,
             },
+            {
+                name: 'server_info',
+                description: SERVER_INFO_DESC,
+                inputSchema: SERVER_INFO_SCHEMA,
+            },
         ],
     }))
 
@@ -60,6 +66,8 @@ export const createServer = () => {
             result = await httpReadTool(a as never, cache)
         } else if (name === 'http_inspect') {
             result = await httpInspectTool(a as never, cache)
+        } else if (name === 'server_info') {
+            result = serverInfoTool(VERSION)
         } else {
             throw new Error('unknown tool: ' + name)
         }
@@ -102,6 +110,11 @@ const HTTP_INSPECT_DESC =
     'without making a second HTTP call. ' +
     'Try `shape` for nested structures, `sample` to see one realistic record, or `json_schema` for downstream typed pipelines.'
 
+const SERVER_INFO_DESC =
+    'Debug helper. No params. Returns the current rest-magpie version, runtime detection (npx | docker | unknown), ' +
+    'cwd, MAGPIE_FILES_ROOT (or null), and every effective MAGPIE_* env-var value. ' +
+    'Use when a path is rejected unexpectedly, or to confirm which container/host the server is actually running in.'
+
 // JSON Schemas — order of properties matches the spec §4 canonical order.
 const HTTP_REQUEST_SCHEMA = {
     type: 'object',
@@ -130,13 +143,26 @@ const HTTP_REQUEST_SCHEMA = {
                 files: {
                     type: 'object',
                     additionalProperties: {
-                        type: 'object',
-                        properties: {
-                            path: { type: 'string' },
-                            filename: { type: 'string' },
-                            content_type: { type: 'string' },
-                        },
-                        required: ['path'],
+                        oneOf: [
+                            {
+                                type: 'object',
+                                properties: {
+                                    path: { type: 'string' },
+                                    filename: { type: 'string' },
+                                    content_type: { type: 'string' },
+                                },
+                                required: ['path'],
+                            },
+                            {
+                                type: 'object',
+                                properties: {
+                                    content_base64: { type: 'string' },
+                                    filename: { type: 'string' },
+                                    content_type: { type: 'string' },
+                                },
+                                required: ['content_base64'],
+                            },
+                        ],
                     },
                 },
             },
@@ -173,6 +199,12 @@ const HTTP_READ_SCHEMA = {
         save_to: { type: 'string', description: 'Required for binary bodies.' },
     },
     required: ['cache_id'],
+}
+
+const SERVER_INFO_SCHEMA = {
+    type: 'object',
+    properties: {},
+    additionalProperties: false,
 }
 
 const HTTP_INSPECT_SCHEMA = {

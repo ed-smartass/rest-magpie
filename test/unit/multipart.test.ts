@@ -98,4 +98,44 @@ describe('buildMultipart', () => {
         const text = (await drainBody(body)).toString('utf8')
         expect(text).toContain('filename="name \\"with\\" \\\\backslash.txt"')
     })
+
+    it('encodes content_base64 inline file', async () => {
+        const payload = Buffer.from('inline-bytes', 'utf8').toString('base64')
+        const { body } = buildMultipart({
+            files: {
+                photo: {
+                    content_base64: payload,
+                    filename: 'photo.txt',
+                    content_type: 'text/plain',
+                },
+            },
+        })
+        const text = (await drainBody(body)).toString('utf8')
+        expect(text).toContain('filename="photo.txt"')
+        expect(text).toContain('Content-Type: text/plain')
+        expect(text).toContain('inline-bytes')
+    })
+
+    it('rejects when both path and content_base64 supplied', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'magpie-mp-'))
+        const p = join(dir, 'a.bin')
+        writeFileSync(p, 'x')
+        expect(() =>
+            buildMultipart({
+                files: {
+                    // biome-ignore lint/suspicious/noExplicitAny: testing invalid input
+                    f: { path: p, content_base64: 'aGVsbG8=' } as any,
+                },
+            }),
+        ).toThrow(/exactly one/)
+    })
+
+    it('rejects when neither path nor content_base64 supplied', () => {
+        expect(() =>
+            buildMultipart({
+                // biome-ignore lint/suspicious/noExplicitAny: testing invalid input
+                files: { f: {} as any },
+            }),
+        ).toThrow(/exactly one/)
+    })
 })
