@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { resetConfigCache } from '../../src/config.js'
 import { renderPaths } from '../../src/core/schema/paths.js'
 
 const usersFixture = JSON.parse(readFileSync('test/fixtures/users.json', 'utf8'))
@@ -40,6 +41,26 @@ describe('renderPaths', () => {
         cur.value = 1
         const out = renderPaths(deep, 50)
         expect(out).toContain('<max depth>')
+    })
+
+    it('depth-overflow at root level uses (root) prefix, not stray leading dot', () => {
+        // Build a structure where depth overflows immediately at root.
+        const original = process.env.MAGPIE_SCHEMA_MAX_DEPTH
+        process.env.MAGPIE_SCHEMA_MAX_DEPTH = '0'
+        resetConfigCache()
+        try {
+            const out = renderPaths({ a: { b: 1 } }, 10)
+            // No line should start with a stray leading dot from `'' + '.???'`.
+            for (const line of out.split('\n')) {
+                if (line.startsWith('.')) {
+                    throw new Error('found stray leading-dot line: ' + JSON.stringify(line))
+                }
+            }
+        } finally {
+            if (original === undefined) delete process.env.MAGPIE_SCHEMA_MAX_DEPTH
+            else process.env.MAGPIE_SCHEMA_MAX_DEPTH = original
+            resetConfigCache()
+        }
     })
 
     it('truncates long string examples', () => {

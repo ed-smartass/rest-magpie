@@ -38,6 +38,14 @@ describe('isUnderRoot', () => {
         // resolve() turns 'photo.jpg' into cwd/photo.jpg, which is unlikely to be under root.
         expect(isUnderRoot('photo.jpg', '/data/uploads')).toBe(false)
     })
+
+    it('handles root="/" without the "//" prefix bug', () => {
+        // With the old `rr + sep` logic, root='/' became '//' and rejected
+        // every absolute path. Everything is under '/' so accept all.
+        expect(isUnderRoot('/etc/passwd', '/')).toBe(true)
+        expect(isUnderRoot('/home/user/file', '/')).toBe(true)
+        expect(isUnderRoot('/', '/')).toBe(true)
+    })
 })
 
 describe('ensureUnderRoot', () => {

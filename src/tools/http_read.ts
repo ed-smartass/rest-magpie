@@ -25,7 +25,18 @@ export const httpReadTool = async (
         if (!params.save_to) {
             return makeError('invalid_input', 'binary body requires save_to to retrieve content')
         }
-        const buf = entry.body as Buffer
+        // entry.body is null when the original http_request used download_to:
+        // the bytes streamed straight to disk instead of being buffered in
+        // memory, so there's nothing to write here. Surface this clearly
+        // instead of crashing on a blind cast.
+        if (!Buffer.isBuffer(entry.body)) {
+            return makeError(
+                'invalid_input',
+                'binary body is not buffered for this cache entry (original request used download_to). ' +
+                    'Refer to meta.download_path on the http_request response, or re-fetch without download_to.',
+            )
+        }
+        const buf = entry.body
         try {
             await writeFile(params.save_to, buf)
         } catch (e) {

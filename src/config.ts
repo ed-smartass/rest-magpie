@@ -31,8 +31,10 @@ const boolEnv = (name: string, fallback: boolean): boolean => {
 
 const pathEnv = (name: string): string | undefined => {
     const raw = process.env[name]
-    if (raw === undefined || raw.trim() === '') return undefined
-    return resolve(raw)
+    if (raw === undefined) return undefined
+    const trimmed = raw.trim()
+    if (trimmed === '') return undefined
+    return resolve(trimmed)
 }
 
 export const loadConfig = (): Config => {

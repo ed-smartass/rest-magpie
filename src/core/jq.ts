@@ -30,7 +30,16 @@ export type JqErr = {
 }
 export type JqResult = JqOk | JqErr
 
-const TIMEOUT_SENTINEL = '__JQ_TIMEOUT__'
+// Custom error class for jq timeouts. A class lets classifyError check
+// `instanceof` rather than substring-matching the error message — the latter
+// would misclassify if a runtime error message happened to contain the
+// sentinel string verbatim.
+class JqTimeoutError extends Error {
+    constructor() {
+        super('jq evaluation timed out')
+        this.name = 'JqTimeoutError'
+    }
+}
 
 export const runJq = async (
     parsed: unknown,
@@ -43,7 +52,7 @@ export const runJq = async (
         const jq = await getJq()
         const inputStr = JSON.stringify(parsed)
         const timeoutPromise = new Promise<never>((_, reject) => {
-            timer = setTimeout(() => reject(new Error(TIMEOUT_SENTINEL)), cfg.jqTimeoutMs)
+            timer = setTimeout(() => reject(new JqTimeoutError()), cfg.jqTimeoutMs)
             if (typeof timer.unref === 'function') timer.unref()
         })
         // Use -c so each output is a single compact JSON value per line.
@@ -59,16 +68,21 @@ export const runJq = async (
 const collect = (raw: string, mode: JqOutputMode): unknown => {
     const lines = raw.split(/\r?\n/).filter((l) => l.length > 0)
     const values = lines.map((l) => JSON.parse(l))
-    if (mode === 'first') return values[0]
+    if (mode === 'first') {
+        // Return null (not undefined) on empty output: undefined disappears
+        // when the result is JSON-serialised, leaving the agent with a
+        // misleadingly-empty response.
+        return values.length > 0 ? values[0] : null
+    }
     if (values.length === 1) return values[0]
     return values
 }
 
 const classifyError = (err: unknown): JqErr => {
-    const msg = err instanceof Error ? err.message : String(err)
-    if (msg.includes(TIMEOUT_SENTINEL)) {
+    if (err instanceof JqTimeoutError) {
         return { ok: false, kind: 'jq_timeout', message: 'jq evaluation timed out' }
     }
+    const msg = err instanceof Error ? err.message : String(err)
     // jq-wasm 1.0.x error message shapes (verified empirically):
     //   syntax: "jq: error: syntax error, ... \njq: 1 compile error"
     //   runtime: "jq: error (at /dev/stdin:LINE): <reason>"

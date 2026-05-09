@@ -35,7 +35,9 @@ const walk = (
     max: number,
 ): void => {
     if (depth > max) {
-        addLeaf(out, path + '.???', '<max depth>')
+        // At the root level `path` is empty; appending '.???' would produce
+        // a stray leading dot. Use the (root) sentinel like other branches.
+        addLeaf(out, path === '' ? '(root).???' : path + '.???', '<max depth>')
         return
     }
     if (value === null) {
