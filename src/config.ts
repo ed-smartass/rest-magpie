@@ -1,3 +1,5 @@
+import { resolve } from 'node:path'
+
 export interface Config {
     defaultTimeoutMs: number
     maxResponseBytes: number
@@ -9,6 +11,7 @@ export interface Config {
     schemaMaxDepth: number
     schemaMaxObjectKeys: number
     schemaSampleMaxString: number
+    filesRoot: string | undefined
 }
 
 const TRUTHY = new Set(['1', 'true', 'yes', 'on'])
@@ -26,6 +29,12 @@ const boolEnv = (name: string, fallback: boolean): boolean => {
     return TRUTHY.has(raw.toLowerCase())
 }
 
+const pathEnv = (name: string): string | undefined => {
+    const raw = process.env[name]
+    if (raw === undefined || raw.trim() === '') return undefined
+    return resolve(raw)
+}
+
 export const loadConfig = (): Config => {
     return {
         defaultTimeoutMs: intEnv('MAGPIE_DEFAULT_TIMEOUT_MS', 30000),
@@ -38,6 +47,7 @@ export const loadConfig = (): Config => {
         schemaMaxDepth: intEnv('MAGPIE_SCHEMA_MAX_DEPTH', 10),
         schemaMaxObjectKeys: intEnv('MAGPIE_SCHEMA_MAX_OBJECT_KEYS', 200),
         schemaSampleMaxString: intEnv('MAGPIE_SCHEMA_SAMPLE_MAX_STRING', 100),
+        filesRoot: pathEnv('MAGPIE_FILES_ROOT'),
     }
 }
 
