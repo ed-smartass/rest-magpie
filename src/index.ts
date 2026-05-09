@@ -8,7 +8,13 @@ import { httpReadTool } from './tools/http_read.js'
 import { httpRequestTool } from './tools/http_request.js'
 
 export const createServer = () => {
-    const cache = new Cache(getConfig().cacheTtlSeconds)
+    const cfg = getConfig()
+    const cache = new Cache(cfg.cacheTtlSeconds)
+    const filesNote = cfg.filesRoot
+        ? ' Server-side file paths (multipart.files[].path, download_to, save_to) must reside under ' +
+          cfg.filesRoot +
+          '.'
+        : ''
     const server = new Server(
         { name: 'rest-magpie', version: '0.1.0' },
         { capabilities: { tools: {} } },
@@ -18,10 +24,14 @@ export const createServer = () => {
         tools: [
             {
                 name: 'http_request',
-                description: HTTP_REQUEST_DESC,
+                description: HTTP_REQUEST_DESC + filesNote,
                 inputSchema: HTTP_REQUEST_SCHEMA,
             },
-            { name: 'http_read', description: HTTP_READ_DESC, inputSchema: HTTP_READ_SCHEMA },
+            {
+                name: 'http_read',
+                description: HTTP_READ_DESC + filesNote,
+                inputSchema: HTTP_READ_SCHEMA,
+            },
             {
                 name: 'http_inspect',
                 description: HTTP_INSPECT_DESC,
