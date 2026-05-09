@@ -1,6 +1,5 @@
-<!-- Hero banner — placeholder, replace with docs/images/banner.png -->
 <p align="center">
-  <img src="docs/images/banner.png" alt="rest-magpie banner" width="720">
+  <img src="docs/images/banner.png" alt="rest-magpie — REST that picks only the shiny bits" width="100%">
 </p>
 
 <h1 align="center">rest-magpie</h1>
