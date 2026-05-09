@@ -37,6 +37,16 @@ describe('config', () => {
         expect(loadConfig().filesRoot).toBeUndefined()
     })
 
+    it('trims whitespace before resolving MAGPIE_FILES_ROOT', () => {
+        process.env.MAGPIE_FILES_ROOT = '  /data/uploads  '
+        expect(loadConfig().filesRoot).toBe('/data/uploads')
+    })
+
+    it('treats whitespace-only MAGPIE_FILES_ROOT as unset', () => {
+        process.env.MAGPIE_FILES_ROOT = '   '
+        expect(loadConfig().filesRoot).toBeUndefined()
+    })
+
     it('respects integer env vars', () => {
         process.env.MAGPIE_DEFAULT_TIMEOUT_MS = '5000'
         process.env.MAGPIE_AUTO_INCLUDE_BODY_BYTES = '1024'

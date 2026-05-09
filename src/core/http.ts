@@ -23,6 +23,17 @@ export interface HttpOptions {
     dispatcher?: Dispatcher
 }
 
+// Lowercase all incoming header names so internal lookups can be a single
+// case-sensitive comparison and we don't accidentally double-set headers
+// (e.g. caller passes "Content-Type", we then add "content-type"). HTTP
+// header names are case-insensitive on the wire so this is RFC-correct.
+const normalizeHeaders = (h: Record<string, string> | undefined): Record<string, string> => {
+    const out: Record<string, string> = {}
+    if (!h) return out
+    for (const [k, v] of Object.entries(h)) out[k.toLowerCase()] = v
+    return out
+}
+
 export const performHttp = async (
     params: HttpRequestParams,
     opts: HttpOptions,
@@ -31,11 +42,11 @@ export const performHttp = async (
     const url = buildUrl(params.url, params.query)
     const start = Date.now()
 
-    const headers: Record<string, string> = { ...(params.headers ?? {}) }
+    const initialHeaders = normalizeHeaders(params.headers)
 
     const { body, contentType: bodyCt } = resolveBody(params)
-    if (body !== undefined && !headers['content-type']) {
-        headers['content-type'] = params.content_type ?? bodyCt ?? 'application/octet-stream'
+    if (body !== undefined && initialHeaders['content-type'] === undefined) {
+        initialHeaders['content-type'] = params.content_type ?? bodyCt ?? 'application/octet-stream'
     }
 
     const insecure = params.tls_insecure ?? cfg.tlsInsecure
@@ -46,17 +57,24 @@ export const performHttp = async (
     const followLimit = (params.follow_redirects ?? true) ? 10 : 0
     const redirectChain: string[] = []
     let currentUrl = url
+    let currentMethod = params.method
+    let currentBody: typeof body = body
+    let currentHeaders: Record<string, string> = { ...initialHeaders }
     let resp: Response | undefined
 
     for (let i = 0; i <= followLimit; i++) {
         const init: Record<string, unknown> = {
-            method: params.method,
-            headers,
-            body,
+            method: currentMethod,
+            headers: currentHeaders,
+            body: currentBody,
             redirect: 'manual',
             signal: AbortSignal.timeout(params.timeout_ms ?? cfg.defaultTimeoutMs),
         }
-        if (body !== undefined && typeof body !== 'string' && !Buffer.isBuffer(body)) {
+        if (
+            currentBody !== undefined &&
+            typeof currentBody !== 'string' &&
+            !Buffer.isBuffer(currentBody)
+        ) {
             init.duplex = 'half'
         }
         if (dispatcher) init.dispatcher = dispatcher
@@ -68,6 +86,24 @@ export const performHttp = async (
             const next = new URL(loc, currentUrl).toString()
             redirectChain.push(next)
             currentUrl = next
+
+            // RFC 7231 §6.4: 301/302/303 invariably downgrade unsafe methods
+            // to GET and drop the request body when followed. 307/308
+            // explicitly preserve method+body. We deliberately don't try to
+            // be clever — match the spec letter so callers are not surprised.
+            const isMethodChangingStatus =
+                resp.status === 301 || resp.status === 302 || resp.status === 303
+            const isUnsafe = currentMethod !== 'GET' && currentMethod !== 'HEAD'
+            if (isMethodChangingStatus && isUnsafe) {
+                currentMethod = 'GET'
+                currentBody = undefined
+                // Drop content-* headers that no longer make sense without a body.
+                const next: Record<string, string> = {}
+                for (const [k, v] of Object.entries(currentHeaders)) {
+                    if (k !== 'content-type' && k !== 'content-length') next[k] = v
+                }
+                currentHeaders = next
+            }
             continue
         }
         break
@@ -96,30 +132,66 @@ export const performHttp = async (
 
     if (params.download_to) {
         const fs = await import('node:fs')
+        const fsp = await import('node:fs/promises')
         const { createHash } = await import('node:crypto')
         const stream = fs.createWriteStream(params.download_to)
         const hasher = createHash('sha256')
-        if (reader) {
-            for (;;) {
-                const { value, done } = await reader.read()
-                if (done) break
-                if (value) {
-                    total += value.length
-                    if (total > cfg.maxResponseBytes) {
-                        reader.cancel().catch(() => {})
-                        stream.destroy()
-                        const e = new Error('body_too_large')
-                        ;(e as { kind?: string }).kind = 'body_too_large'
-                        throw e
-                    }
-                    stream.write(Buffer.from(value))
-                    hasher.update(value)
-                }
+
+        // Surface stream errors deterministically — without a listener,
+        // 'error' on a destroyed write stream goes to uncaughtException.
+        let streamError: Error | undefined
+        stream.on('error', (e: Error) => {
+            streamError = e
+        })
+
+        const writeWithBackpressure = async (chunk: Buffer): Promise<void> => {
+            if (!stream.write(chunk) && !stream.destroyed) {
+                await new Promise<void>((res) => {
+                    stream.once('drain', () => res())
+                })
             }
         }
-        await new Promise<void>((res, rej) =>
-            stream.end((err: Error | null | undefined) => (err ? rej(err) : res())),
-        )
+
+        const cleanupPartial = async (): Promise<void> => {
+            try {
+                await fsp.unlink(params.download_to as string)
+            } catch {
+                // Best-effort: file might not exist yet, or deletion blocked.
+            }
+        }
+
+        try {
+            if (reader) {
+                for (;;) {
+                    const { value, done } = await reader.read()
+                    if (done) break
+                    if (value) {
+                        total += value.length
+                        if (total > cfg.maxResponseBytes) {
+                            reader.cancel().catch(() => {})
+                            stream.destroy()
+                            await cleanupPartial()
+                            const e = new Error('body_too_large')
+                            ;(e as { kind?: string }).kind = 'body_too_large'
+                            throw e
+                        }
+                        await writeWithBackpressure(Buffer.from(value))
+                        hasher.update(value)
+                    }
+                }
+            }
+            await new Promise<void>((res, rej) =>
+                stream.end((err: Error | null | undefined) => (err ? rej(err) : res())),
+            )
+            if (streamError) throw streamError
+        } catch (err) {
+            // If a write error surfaced mid-stream and we haven't already
+            // tagged & cleaned up, do so before rethrowing.
+            const tagged = (err as { kind?: string }).kind
+            if (!tagged) await cleanupPartial()
+            throw err
+        }
+
         const ct = resp.headers.get('content-type') ?? ''
         return {
             status: resp.status,

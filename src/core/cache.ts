@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import type { CacheEntry } from '../types.js'
 
 interface Slot {
@@ -10,10 +11,12 @@ export class Cache {
 
     constructor(private readonly ttlSeconds: number) {}
 
+    // Cryptographically random ID. cache_ids cross between http_request
+    // (server-side) and http_read (agent-supplied), so guessability is a
+    // soft confidentiality concern — guessing a live cache_id leaks the
+    // body of someone else's response within the same process.
     newId(): string {
-        const ts = Date.now().toString(36)
-        const rand = Math.random().toString(36).slice(2, 10)
-        return 'req_' + ts + rand
+        return 'req_' + randomBytes(16).toString('hex')
     }
 
     put(entry: CacheEntry): void {

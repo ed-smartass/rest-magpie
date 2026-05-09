@@ -28,4 +28,17 @@ describe('runJq', () => {
         expect(r.ok).toBe(false)
         if (!r.ok) expect(r.kind).toBe('jq_runtime_error')
     })
+
+    it('returns null (not undefined) when output_mode=first has no output', async () => {
+        // .data[] on an empty array yields zero outputs. With `undefined` the
+        // value would disappear during JSON.stringify on the way back to the
+        // agent, leaving a misleadingly-empty response.
+        const r = await runJq({ data: [] }, '.data[]', 'first')
+        expect(r).toEqual({ ok: true, value: null })
+    })
+
+    it('returns null when output_mode=first matches no key (empty)', async () => {
+        const r = await runJq({ a: 1 }, '.b // empty', 'first')
+        expect(r).toEqual({ ok: true, value: null })
+    })
 })

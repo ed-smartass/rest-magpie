@@ -9,6 +9,14 @@ import { httpInspectTool } from './tools/http_inspect.js'
 import { httpReadTool } from './tools/http_read.js'
 import { httpRequestTool } from './tools/http_request.js'
 
+// Replaced by tsup at build time (see tsup.config.ts `define`). Falls back to
+// process.env.npm_package_version when running under npm scripts (tests).
+declare const __MAGPIE_VERSION__: string | undefined
+const VERSION =
+    typeof __MAGPIE_VERSION__ !== 'undefined'
+        ? __MAGPIE_VERSION__
+        : (process.env.npm_package_version ?? '0.0.0-dev')
+
 export const createServer = () => {
     const cfg = getConfig()
     const cache = new Cache(cfg.cacheTtlSeconds)
@@ -18,7 +26,7 @@ export const createServer = () => {
           '.'
         : ''
     const server = new Server(
-        { name: 'rest-magpie', version: '0.1.2' },
+        { name: 'rest-magpie', version: VERSION },
         { capabilities: { tools: {} } },
     )
 

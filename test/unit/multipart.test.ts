@@ -51,4 +51,51 @@ describe('buildMultipart', () => {
         expect(text).toContain('filename="data.bin"')
         expect(text).toContain('Content-Type: application/octet-stream')
     })
+
+    it('rejects CR/LF in field name (header injection guard)', () => {
+        expect(() =>
+            buildMultipart({
+                fields: { 'name\r\nX-Injected: yes': 'alice' },
+            }),
+        ).toThrow(/illegal control character/)
+    })
+
+    it('rejects CR/LF in filename (header injection guard)', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'magpie-mp-'))
+        const p = join(dir, 'a.bin')
+        writeFileSync(p, 'x')
+        expect(() =>
+            buildMultipart({
+                files: {
+                    f: { path: p, filename: 'evil\r\nContent-Type: text/html' },
+                },
+            }),
+        ).toThrow(/illegal control character/)
+    })
+
+    it('rejects CR/LF in content_type (header injection guard)', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'magpie-mp-'))
+        const p = join(dir, 'a.bin')
+        writeFileSync(p, 'x')
+        expect(() =>
+            buildMultipart({
+                files: {
+                    f: { path: p, content_type: 'text/plain\r\nX-Bad: yes' },
+                },
+            }),
+        ).toThrow(/illegal control character/)
+    })
+
+    it('escapes backslash and quote in filename per RFC 7578', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'magpie-mp-'))
+        const p = join(dir, 'a.bin')
+        writeFileSync(p, 'x')
+        const { body } = buildMultipart({
+            files: {
+                f: { path: p, filename: 'name "with" \\backslash.txt' },
+            },
+        })
+        const text = (await drainBody(body)).toString('utf8')
+        expect(text).toContain('filename="name \\"with\\" \\\\backslash.txt"')
+    })
 })

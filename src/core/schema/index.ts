@@ -15,6 +15,12 @@ export const renderSchema = (format: SchemaFormat, parsed: unknown, bodyBytes: n
             return renderSample(parsed, bodyBytes)
         case 'json_schema':
             return renderJsonSchema(parsed)
+        default: {
+            // Exhaustiveness guard: if SchemaFormat gains a new value, this
+            // line fails to compile until the switch is updated.
+            const _exhaustive: never = format
+            throw new Error('unsupported schema_format: ' + String(_exhaustive))
+        }
     }
 }
 
