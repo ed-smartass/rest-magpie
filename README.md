@@ -28,7 +28,7 @@
 
 ## Use it in
 
-Drop the snippet for your client into its MCP config. All clients run the same `npx -y rest-magpie` underneath; the wrapping JSON differs slightly.
+Drop the snippet for your client into its MCP config. The desktop / IDE clients all spawn `npx -y rest-magpie` under the hood; the wrapping JSON differs slightly per client. Docker is an alternative wrapper for any of them — see the last entry.
 
 <details>
 <summary><strong>Claude Desktop</strong> — <code>claude_desktop_config.json</code></summary>
@@ -165,13 +165,13 @@ One MCP install replaces every `curl` your agent would run, so you authorize onc
 |---|---|---|
 | **npx (default)** | The MCP server runs on the same machine as your agent. | Simplest setup. Paths are local to your host — what the agent passes is what the server sees. |
 | **Docker** | You want isolation, or are running the server alongside other tooling in containers. | Paths are local to the container. Use the same-path bind mount + `MAGPIE_FILES_ROOT` pattern (above) so agent paths "just work" without translation. |
-| **Remote MCP** (over HTTP / SSE) | The server runs on shared infrastructure separate from the agent. | **Surprising default:** any path you pass for `multipart.files[].path`, `download_to`, or `save_to` resolves on the *server*, not the agent's filesystem. For uploads, pass `multipart.files[].content_base64` instead (since v0.2) — the bytes travel inline in the JSON-RPC frame, no path semantics involved. Downloads still don't have an inline-base64 mode; keep `download_to` to npx/Docker. |
+| **Remote MCP** (over HTTP / SSE) | The server runs on shared infrastructure separate from the agent. | **Surprising default:** any path you pass for `multipart.files.<name>.path`, `download_to`, or `save_to` resolves on the *server*, not the agent's filesystem. For uploads, pass `multipart.files.<name>.content_base64` instead (since v0.2) — the bytes travel inline in the JSON-RPC frame, no path semantics involved. Downloads still don't have an inline-base64 mode; keep `download_to` to npx/Docker. |
 
 ### Where do file paths resolve?
 
 | Field | npx | Docker | Remote MCP |
 |---|---|---|---|
-| `multipart.files[].path` | host (agent's) | container — use same-path mount | server's filesystem |
+| `multipart.files.<name>.path` | host (agent's) | container — use same-path mount | server's filesystem |
 | `download_to` | host (agent's) | container — use same-path mount | server's filesystem |
 | `save_to` (in `http_read`) | host (agent's) | container — use same-path mount | server's filesystem |
 
@@ -187,7 +187,7 @@ Multipart uploads stream files via **chunked transfer encoding** (no `Content-Le
 
 | Tool | What it does |
 |---|---|
-| `http_request` | Run an HTTP request; cache the body; return a schema (and optionally a preview / full body, governed by `body_mode`). |
+| `http_request` | Run an HTTP request; return a schema (and optionally a preview / full body, governed by `body_mode`). The body is cached for `http_read`, except when `download_to` streams it straight to disk. |
 | `http_read` | Read a cached body, optionally filtered by a `jq` mask. Required for binaries (use `save_to`). |
 | `http_inspect` | Re-render the cached body's schema in another format — no second HTTP call. |
 | `server_info` | Debug helper. No params. Returns version, runtime, `MAGPIE_FILES_ROOT`, and every effective limit. |
@@ -365,14 +365,14 @@ All env vars are optional. Defaults match common-sense limits.
 | `MAGPIE_HEAD_PREVIEW_ITEMS` | 5 | array items kept verbatim in `body_preview` (rest collapsed) |
 | `MAGPIE_HEAD_PREVIEW_STRING` | 200 | string truncation length in `body_preview` |
 | `MAGPIE_INLINE_BODY_CAP` | 262144 | hard cap on `body_mode: "inline"` (256 KB) |
-| `MAGPIE_MAX_INLINE_FILE_BYTES` | 10485760 | hard cap on `multipart.files[].content_base64` (10 MB pre-base64) |
+| `MAGPIE_MAX_INLINE_FILE_BYTES` | 10485760 | hard cap on `multipart.files.<name>.content_base64` (10 MB pre-base64) |
 | `MAGPIE_JQ_TIMEOUT_MS` | 5000 | per-mask jq timeout |
 | `MAGPIE_USE_NATIVE_JQ` | 0 | switch to subprocess jq (reserved, not heavily exercised) |
 | `MAGPIE_TLS_INSECURE` | 0 | skip TLS verification |
 | `MAGPIE_SCHEMA_MAX_DEPTH` | 10 | recursion depth for schema renderers |
 | `MAGPIE_SCHEMA_MAX_OBJECT_KEYS` | 200 | per-object key cap |
 | `MAGPIE_SCHEMA_SAMPLE_MAX_STRING` | 100 | string truncation in samples |
-| `MAGPIE_FILES_ROOT` | _(unset)_ | restricts `multipart.files[].path`, `download_to`, and `save_to` to canonical paths under this prefix; unset means no constraint. Does **not** apply to `multipart.files[].content_base64` (no path involved) |
+| `MAGPIE_FILES_ROOT` | _(unset)_ | restricts `multipart.files.<name>.path`, `download_to`, and `save_to` to canonical paths under this prefix; unset means no constraint. Does **not** apply to `multipart.files.<name>.content_base64` (no path involved) |
 
 ## How much context does this actually save?
 
