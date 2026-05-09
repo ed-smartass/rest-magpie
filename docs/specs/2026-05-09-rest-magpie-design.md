@@ -44,12 +44,13 @@ LLM agents using MCP tooling for REST APIs face two recurring pains:
 │ MCP stdio transport (@modelcontextprotocol/sdk)             │
 └─────────────────────────────────────────────────────────────┘
                             │
-       ┌────────────────────┼────────────────────┐
-       ▼                    ▼                    ▼
-  http_request          http_read           http_inspect
-  (HTTP + cache +       (jq filter or       (re-render schema
-   schema render)       full body or         in different
-                        save_to file)        format on cache)
+       ┌────────────────────┼─────────────┬────────────────┐
+       ▼                    ▼             ▼                ▼
+  http_request          http_read    http_inspect     server_info
+  (HTTP + cache +       (jq filter   (re-render       (runtime +
+   schema render)       or full      schema in        effective
+                        body or      different        limits, no
+                        save_to)     format)          side effects)
        │                    │                    │
        └────────────┬───────┴───────────┬────────┘
                     ▼                   ▼
@@ -74,6 +75,7 @@ LLM agents using MCP tooling for REST APIs face two recurring pains:
 | `tools/http_request.ts` | top-level entry: validates input, dispatches HTTP, caches, renders schema, optionally inlines body |
 | `tools/http_read.ts` | reads cached body, applies jq mask if any, or saves to file for binaries |
 | `tools/http_inspect.ts` | renders alternate schema format on already-cached body |
+| `tools/server_info.ts` | one-shot debug tool: returns version, runtime detection, cwd, files_root, effective env-var values |
 | `core/http.ts` | undici-based fetch + multipart builder + redirect/decompress/TLS handling |
 | `core/cache.ts` | in-memory store keyed by random `cache_id`, TTL eviction via timer |
 | `core/jq.ts` | jq-wasm wrapper (default) + opt-in subprocess to `node-jq` |
@@ -106,11 +108,7 @@ http_request({
   body_raw?: string,                         // raw payload; pair with content_type
   multipart?: {
     fields?: Record<string, string>,
-    files?: Record<string, {
-      path: string,                          // server-side absolute path (in-container if dockerized)
-      filename?: string,
-      content_type?: string,
-    }>,
+    files?: Record<string, MultipartFile>,
   },
   content_type?: string,                     // explicit override of inferred Content-Type
 
@@ -121,7 +119,7 @@ http_request({
 
   // 5. Output shape — what to return
   schema_format?: "paths" | "shape" | "sample" | "json_schema",  // default "paths"
-  include_body?: boolean | "auto",           // default "auto"
+  body_mode?: "auto" | "schema" | "head" | "inline",             // default "auto"
 
   // 6. Alternative output — uncommon: stream body to file instead of caching
   download_to?: string,
@@ -136,26 +134,70 @@ http_request({
     body_bytes: number,
     content_type: string,                    // raw value of Content-Type header
     body_kind: "json" | "text" | "binary" | "empty",
-    body_included: boolean,
+    body_inclusion: {
+      resolved_mode: "schema" | "head" | "inline",  // what mode actually applied (for "auto")
+      inline_threshold_bytes: number,               // current MAGPIE_INLINE_THRESHOLD_BYTES
+      head_preview_threshold_bytes: number,         // current MAGPIE_HEAD_PREVIEW_THRESHOLD
+      head_preview_items: number,                   // current MAGPIE_HEAD_PREVIEW_ITEMS
+      head_preview_string_chars: number,            // current MAGPIE_HEAD_PREVIEW_STRING
+      inline_cap_bytes: number,                     // current MAGPIE_INLINE_BODY_CAP
+      reason?: string,                              // populated only when the resolved mode wasn't obvious
+    },
     redirect_chain: string[],                // empty if no redirects
     download_path?: string,                  // present iff download_to was used
   },
   schema: string | object,                   // string for paths/shape/sample; object for json_schema; or descriptor for non-json
-  body?: unknown,                            // present iff meta.body_included
+  next_step_hints?: string[],                // advisory jq-mask suggestions inferred from top-level shape (JSON only)
+  body_preview?: unknown,                    // present iff resolved_mode === "head"; arrays/strings truncated with sibling _truncated markers
+  body?: unknown,                            // present iff resolved_mode === "inline"
 }
 ```
 
-**Body validation.** Exactly one of `body | body_raw | multipart` must be supplied for methods that take a body. `download_to` is mutually exclusive with `include_body: true`. Violations → `error.kind = "invalid_input"`.
+`MultipartFile` is one of two shapes (exactly one of `path` or `content_base64` required):
 
-**Auto-include rule.**
-```
-include_body == true   → always include (unless binary / over limit)
-include_body == false  → never include
-include_body == "auto" → include iff body_kind in {json, text} AND body_bytes <= MAGPIE_AUTO_INCLUDE_BODY_BYTES (default 8192)
-                         binary → always exclude even at 0 bytes (no inline binaries)
+```ts
+type MultipartFile =
+  | { path: string;          filename?: string; content_type?: string } // server-side absolute path (in-container if dockerized)
+  | { content_base64: string; filename?: string; content_type?: string } // inline payload, decoded from base64
 ```
 
-The `meta.body_included` boolean is authoritative; the `body` field's presence matches it.
+**Body validation.** Exactly one of `body | body_raw | multipart` must be supplied for methods that take a body. `download_to` is mutually exclusive with `body_mode: "inline"`. Sending the legacy field `include_body` returns `error.kind = "unsupported_field"` with a migration hint.
+
+**`body_mode` resolution.**
+
+```
+body_mode == "schema"  → never include the body inline; only the schema is returned.
+                         resolved_mode = "schema" for every body_kind (incl. empty / binary).
+
+body_mode == "inline"  → include the full body iff body_kind ∈ {json, text} AND
+                         body_bytes ≤ MAGPIE_INLINE_BODY_CAP.
+                         body_kind == binary  → invalid_input (binaries are never inlined; use save_to or download_to).
+                         body_kind == empty   → resolved_mode = "inline", body = null.
+                         body_bytes > cap     → body_too_large_for_inline error;
+                                                cache_id still valid (agent pivots to http_read).
+
+body_mode == "head"    → include schema + body_preview.
+                         body_kind == json    → arrays truncated to MAGPIE_HEAD_PREVIEW_ITEMS, strings to
+                                                MAGPIE_HEAD_PREVIEW_STRING chars; sibling _truncated markers
+                                                describe what was dropped.
+                         body_kind == text    → body_preview = first MAGPIE_HEAD_PREVIEW_STRING chars +
+                                                _truncated marker if longer; effectively the existing
+                                                non-JSON descriptor's `head` field promoted to a
+                                                first-class field.
+                         body_kind == binary  → invalid_input (no preview for binaries).
+                         body_kind == empty   → resolved_mode = "head", body_preview = null.
+
+body_mode == "auto"    → server picks:
+                           body_kind == binary  → "schema" (binaries are never inlined or previewed inline).
+                           body_kind == empty   → "inline" (the body is null; trivially small, no harm).
+                           body_bytes ≤ MAGPIE_INLINE_THRESHOLD_BYTES   → "inline"
+                           ≤ MAGPIE_HEAD_PREVIEW_THRESHOLD              → "head"
+                           else                                          → "schema"
+```
+
+The `meta.body_inclusion.resolved_mode` reports which mode actually applied; the response field that carries the body matches (`body` for inline, `body_preview` for head, neither for schema). For convenient debugging without a separate `server_info` call, `body_inclusion` also surfaces `head_preview_items` and `head_preview_string_chars` so an agent can see what truncation was applied.
+
+**`next_step_hints`.** Advisory only. The server inspects the top-level shape of the parsed body and proposes a few canonical jq masks (e.g. for an array of objects: `length`, `[:5]`, `map({k1, k2})`, `sort_by(...)`). Hints are absent when the body is non-JSON and may be empty for shapes the inferer doesn't recognise. The agent picks one or writes its own; the server does not run them.
 
 ### 4.2 `http_read`
 
@@ -188,6 +230,36 @@ http_inspect({
 ```
 
 Re-renders schema for an already-cached response without an HTTP roundtrip. Errors: `cache_miss`, plus `mask_not_applicable`-equivalent if body_kind is non-json (returns the descriptor unchanged regardless of `schema_format`).
+
+### 4.4 `server_info`
+
+```ts
+server_info({}) → {
+  version: string,                                  // build-time version (matches package.json)
+  runtime: "npx" | "docker" | "unknown",            // detected via /.dockerenv + heuristics
+  cwd: string,                                      // process.cwd()
+  files_root: string | null,                        // resolved MAGPIE_FILES_ROOT or null when unset
+  effective_limits: {
+    inline_threshold_bytes: number,
+    head_preview_threshold_bytes: number,
+    head_preview_items: number,
+    head_preview_string_chars: number,
+    inline_body_cap_bytes: number,
+    max_response_bytes: number,
+    cache_ttl_seconds: number,
+    jq_timeout_ms: number,
+    default_timeout_ms: number,
+    max_inline_file_bytes: number,
+    schema_max_depth: number,
+    schema_max_object_keys: number,
+    schema_sample_max_string: number,
+    tls_insecure: boolean,
+    use_native_jq: boolean,
+  },
+}
+```
+
+No params. One-shot, idempotent, no side effects, no cache. Intended as a debug surface — agents and humans use it when a path is rejected unexpectedly or to confirm which container/host the server is actually running in.
 
 ## 5. Schema formats
 
@@ -271,6 +343,19 @@ Inferred via `genson-js`. `required` is **omitted** (single-sample inference is 
 | Max object keys | `MAGPIE_SCHEMA_MAX_OBJECT_KEYS` | 200 |
 | Sample string max | `MAGPIE_SCHEMA_SAMPLE_MAX_STRING` | 100 |
 
+### 5.6 `next_step_hints` (advisory)
+
+Whenever a JSON body is rendered into a schema, the server also infers a small array of `next_step_hints` based on the top-level shape:
+
+| Top-level shape | Sample hints |
+|---|---|
+| Array of objects | `length`, `[:5]`, `map({key1, key2})`, `sort_by(.created_at)[:10]` |
+| Array of scalars | `length`, `[:10]`, `unique`, `min`, `max` |
+| Object with array-valued field(s) | suggestions targeting each array field (e.g. `.data \| length`, `.data[:5]`) |
+| Plain object | `keys`, projection helpers (`to_entries` / `map(...)`) |
+
+Hints are strings of valid jq, but the server does **not** run them — the agent picks one or writes its own. Returned as `next_step_hints: string[]` on `http_request` and `http_inspect` responses. Empty array (or absent) for non-JSON bodies and unrecognised shapes.
+
 ## 6. Cache
 
 - **Storage:** in-memory `Map<cache_id, CacheEntry>`. No SQLite, no persistence.
@@ -318,7 +403,13 @@ Inferred via `genson-js`. `required` is **omitted** (single-sample inference is 
 
 ### 8.2 Multipart builder
 
-Simple in-memory builder. Files referenced by `path` are streamed (`createReadStream`). Filename defaults to `basename(path)`; content_type defaults to `application/octet-stream` if not specified. No nested multipart support.
+Streaming builder backed by `Readable.from(asyncGenerator())`, fed into `fetch` with `duplex: "half"`.
+
+- `multipart.files[].path` — streamed via `createReadStream`. Filename defaults to `basename(path)`; content_type defaults to `application/octet-stream`.
+- `multipart.files[].content_base64` — decoded into a `Buffer` and streamed from memory. Useful for remote MCP scenarios where path semantics differ between agent and server, and for zero-volume Docker. Capped by `MAGPIE_MAX_INLINE_FILE_BYTES` (default 10 MB pre-base64). `MAGPIE_FILES_ROOT` does not apply to this mode (no path to canonicalise).
+- Header positions (field name, filename, content_type) are validated for CR/LF/NUL and rejected with `invalid_input` if any control character is present (header injection guard); `\` and `"` in name/filename values are RFC 7578 §4.2 escaped.
+- Uploads use **chunked transfer encoding** (no Content-Length). Most modern servers handle this; some primitive test servers / legacy reverse proxies reject it. Tracked for v0.3 compat-mode if real demand surfaces.
+- No nested multipart support.
 
 ### 8.3 Response handling
 
@@ -361,6 +452,8 @@ Stable `kind` codes:
 | `tls_error` | cert validation failure (when not insecure) |
 | `redirect_loop` | exceeded max hops |
 | `body_too_large` | response exceeded MAX_RESPONSE_BYTES |
+| `body_too_large_for_inline` | response cached but exceeded MAGPIE_INLINE_BODY_CAP for `body_mode: "inline"`; `error.detail.cache_id` is set so the agent can switch to `http_read` without refetching |
+| `unsupported_field` | request used a removed/renamed parameter (e.g. legacy `include_body`); `error.message` includes a migration hint |
 | `cache_miss` | cache_id unknown or expired |
 | `jq_syntax_error` | jq could not parse expression |
 | `jq_runtime_error` | jq runtime fault |
@@ -379,14 +472,19 @@ All env vars are optional with sensible defaults.
 | `MAGPIE_DEFAULT_TIMEOUT_MS` | 30000 | per-request HTTP timeout when not overridden |
 | `MAGPIE_MAX_RESPONSE_BYTES` | 52428800 (50MB) | hard cap on in-memory response size |
 | `MAGPIE_CACHE_TTL_SECONDS` | 600 | cache entry lifetime |
-| `MAGPIE_AUTO_INCLUDE_BODY_BYTES` | 8192 | threshold for `include_body: "auto"` |
+| `MAGPIE_INLINE_THRESHOLD_BYTES` | 8192 | `body_mode: "auto"` resolves to `"inline"` for bodies up to this size (renamed from `MAGPIE_AUTO_INCLUDE_BODY_BYTES`). |
+| `MAGPIE_HEAD_PREVIEW_THRESHOLD` | 65536 (64 KB) | `body_mode: "auto"` resolves to `"head"` for bodies up to this size (when above the inline threshold). |
+| `MAGPIE_HEAD_PREVIEW_ITEMS` | 5 | array preview length in `body_mode: "head"` |
+| `MAGPIE_HEAD_PREVIEW_STRING` | 200 | string preview length (chars) in `body_mode: "head"` |
+| `MAGPIE_INLINE_BODY_CAP` | 262144 (256 KB) | hard cap on `body_mode: "inline"`; over this → `body_too_large_for_inline` error |
+| `MAGPIE_MAX_INLINE_FILE_BYTES` | 10485760 (10 MB) | cap on the decoded size of `multipart.files[].content_base64`; over this → `invalid_input` |
 | `MAGPIE_JQ_TIMEOUT_MS` | 5000 | per-mask jq timeout |
 | `MAGPIE_USE_NATIVE_JQ` | 0 | switch to subprocess `node-jq` |
 | `MAGPIE_TLS_INSECURE` | 0 | global insecure TLS toggle |
 | `MAGPIE_SCHEMA_MAX_DEPTH` | 10 | recursion depth for schema renderers |
 | `MAGPIE_SCHEMA_MAX_OBJECT_KEYS` | 200 | per-object key cap |
 | `MAGPIE_SCHEMA_SAMPLE_MAX_STRING` | 100 | string truncation in samples |
-| `MAGPIE_FILES_ROOT` | (unset) | when set, every server-side file path (`multipart.files[].path`, `download_to`, `save_to`) must canonicalize to a location under this prefix; otherwise the call fails with `error.kind = "invalid_input"`. Unset = no constraint (current behavior for npm-mode users). |
+| `MAGPIE_FILES_ROOT` | (unset) | when set, every server-side file path (`multipart.files[].path`, `download_to`, `save_to`) must canonicalize to a location under this prefix; otherwise the call fails with `error.kind = "invalid_input"`. `multipart.files[].content_base64` is exempt (no path). Unset = no constraint. |
 
 When `MAGPIE_FILES_ROOT` is set, the server also appends a one-line note to `http_request` and `http_read` tool descriptions (e.g. *"Server-side file paths must reside under `/data`."*) so LLM clients see the constraint at call-authoring time.
 
@@ -446,9 +544,22 @@ rest-magpie/
 | Build | `tsup` | single ESM bundle to `dist/index.js` |
 | Release | `changesets` or conventional-commits | automated changelog/version |
 
-## 13. Deployment
+## 13. Deployment & run modes
 
-Both modes communicate with Claude over **stdio**. Same `dist/index.js` underneath.
+Three supported run modes: **npx** (default), **Docker**, and **remote MCP** (over HTTP / SSE; agent connects to a server hosted elsewhere). All three communicate with Claude or another MCP client via the standard MCP transport. The same `dist/index.js` underneath.
+
+### File-path semantics by runtime
+
+This is the largest source of real-world confusion, so it's the spec's job to be explicit:
+
+| Field | npx | Docker | Remote MCP |
+|---|---|---|---|
+| `multipart.files[].path` | host (agent's) | container (use same-path bind mount) | server's filesystem (rarely useful — prefer `content_base64`) |
+| `multipart.files[].content_base64` | n/a | n/a | **recommended** for remote — agent supplies the bytes inline |
+| `download_to` | host (agent's) | container (use same-path bind mount) | server's filesystem |
+| `save_to` (in `http_read`) | host (agent's) | container (use same-path bind mount) | server's filesystem |
+
+`MAGPIE_FILES_ROOT`, when set, additionally constrains the three path-based fields to a canonicalised root. `content_base64` is exempt because there's no path to canonicalise.
 
 ### npm
 
@@ -510,35 +621,40 @@ Order matters — first 30 lines decide whether someone stars the repo.
 9. **Real-world examples** — 3 cases (e.g. exploring an unknown REST endpoint, pulling specific fields from GitHub, uploading an image via multipart).
 10. **License (MIT) + Contributing.**
 
-## 15. MVP scope (v0.1.0)
+## 15. Release scope
 
-**In:**
-- All three tools with full spec'd surface.
-- All HTTP methods.
-- `body` / `body_raw` / `multipart` body inputs.
-- Headers and query passthrough.
-- `include_body: auto/true/false`.
-- All four schema formats (default `paths`).
-- `jq-wasm` engine.
-- In-memory cache + 10min TTL.
-- `download_to` for streaming large/binary responses.
-- Hard limits via env.
-- JSON / text / binary / empty body classification.
-- Unified error envelope with all spec'd `kind`s.
-- Docker image (alpine, multi-stage).
-- README + npm + Docker + CI (lint/typecheck/test on PR; release on tag).
-- Test coverage for: schema renderers (golden snapshots), jq integration, cache TTL, content-type classifier, multipart builder, end-to-end via msw.
+### v0.1.0 — initial release (DONE)
 
-**Backlog (v0.2+):**
-- Native `node-jq` engine path (env-toggle present, but not heavily exercised in v0.1).
+- All three tools with the v0.1 surface (`include_body: auto/true/false`).
+- All HTTP methods. `body` / `body_raw` / `multipart` (path-based) body inputs.
+- All four schema formats. jq-wasm engine. In-memory cache + 10-min TTL. `download_to`. JSON / text / binary / empty classification. Unified error envelope. Docker image. CI + release pipeline.
+
+### v0.1.1 / v0.1.2 — patches (DONE)
+
+- v0.1.1: fix bin entrypoint guard for symlinked launches (npx, `npm install -g`).
+- v0.1.2: agent-UX patch — tool descriptions rewritten with default-flow lead, README run-modes section, richer `ensureUnderRoot` error envelope (runtime-aware hint).
+
+### v0.2.0 — agent-UX bundle (in progress)
+
+Replaces `include_body` with `body_mode` (breaking, no alias). Adds `body_mode: "head"` preview, `next_step_hints` schema add-on, `body_mode: "inline"` cap, `meta.body_inclusion` metadata, the `server_info` debug tool, and `multipart.files[].content_base64` for remote-MCP scenarios. Header-injection guard, symlink-resolution path validation, redirect method downgrade, build-time version inlining, and miscellaneous correctness fixes from the pre-v0.2 hardening pass.
+
+### Backlog (v0.3+)
+
+- Native `node-jq` engine path (env-toggle present since v0.1, no real exercise yet).
 - Proxy support (`HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`).
 - mTLS / client certs.
 - Cookie jar (only if real demand emerges).
 - `http_history` tool — list recent cache_ids and their request lines.
 - Optional persistent cache (sqlite or fs) via env-flag.
-- VS Code extension showing live cache contents.
-- Exported TS types for downstream consumers.
+- Multi-arch Docker (linux/arm64).
+- Non-chunked multipart compat mode (only if a real legacy server is reported).
+- `download_mode: "inline_base64"` on `http_request` — closes remote-MCP download asymmetry without an artifact handle layer; ship if/when remote-MCP traction surfaces a real need.
+- Curl export / repro helper.
 - Streaming/SSE — only if a clear MCP-shaped use case emerges.
+
+### Rejected outright (will not be built)
+
+- Artifact-oriented file flow (handle-based file API). Adds stateful artifact lifecycle (creation, TTL, cleanup, retention env, per-agent visibility). Real asymmetry it targets is closed cheaper by `content_base64` upload (in v0.2) plus a future `download_mode: "inline_base64"`.
 
 ## 16. CI / Release
 
@@ -555,6 +671,7 @@ These are settled but worth flagging for implementers:
 
 - **No deduplication of cache.** Every request gets a new `cache_id` even if URL/body match. If you need re-fetch behavior, just call again.
 - **HTTP 4xx/5xx are not MCP errors.** They flow through the success path with the response body fully cached.
-- **`include_body: auto` looks only at byte count, not structure.** A 7KB JSON of base64 garbage will be inlined; a 9KB nicely-shaped response will not. Threshold can be tuned via env.
-- **Multipart files are server-side paths, not inline base64.** This is deliberate — base64-in-JSON-RPC bloats agent context. Volume-mount in Docker.
+- **`body_mode` resolution looks only at byte count, not structure.** A 7 KB JSON of base64 garbage will resolve to `"inline"`; a 9 KB nicely-shaped response will resolve to `"head"`. Both thresholds (`MAGPIE_INLINE_THRESHOLD_BYTES`, `MAGPIE_HEAD_PREVIEW_THRESHOLD`) tunable via env.
+- **Multipart files have two payload shapes.** `path` is the default (server-side absolute path, streamed via `createReadStream`). `content_base64` is the remote-MCP/zero-volume alternative — same agent-UX, but bytes inline. They are mutually exclusive per file. Capped to keep base64-in-JSON-RPC bloat finite.
 - **`schema_format: json_schema` returns an object, others return strings.** Agents need to check `typeof schema`. Documented in tool description.
+- **`next_step_hints` are advisory, not authoritative.** The server proposes; the agent picks one or writes its own and calls `http_read` itself.
