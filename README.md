@@ -71,7 +71,33 @@
 
 The same-path bind mount is the recommended Docker pattern — agent paths translate transparently. Drop `MAGPIE_FILES_ROOT` if you want no path constraint (and you're sure about the security tradeoffs).
 
+## Run modes & file paths
+
+### Which mode to pick
+
+| Mode | Pick when | Trade-offs |
+|---|---|---|
+| **npx (default)** | The MCP server runs on the same machine as your agent. | Simplest setup. Paths are local to your host — what the agent passes is what the server sees. |
+| **Docker** | You want isolation, or are running the server alongside other tooling in containers. | Paths are local to the container. Use the same-path bind mount + `MAGPIE_FILES_ROOT` pattern (above) so agent paths "just work" without translation. |
+| **Remote MCP** (over HTTP / SSE) | The server runs on shared infrastructure separate from the agent. | **Surprising default:** any path you pass for `multipart.files[].path`, `download_to`, or `save_to` resolves on the *server*, not the agent's filesystem. That's almost never what you want. Until v0.2 ships an inline file payload (`content_base64`), keep file-touching tools to npx/Docker mode. |
+
+### Where do file paths resolve?
+
+| Field | npx | Docker | Remote MCP |
+|---|---|---|---|
+| `multipart.files[].path` | host (agent's) | container — use same-path mount | server's filesystem |
+| `download_to` | host (agent's) | container — use same-path mount | server's filesystem |
+| `save_to` (in `http_read`) | host (agent's) | container — use same-path mount | server's filesystem |
+
+When `MAGPIE_FILES_ROOT` is set, all three are also constrained to that root (canonicalised — `..` traversal cannot escape).
+
+### Multipart compatibility
+
+Multipart uploads stream files via **chunked transfer encoding** (no `Content-Length` header). Most modern HTTP servers handle this fine. If you hit a server that rejects chunked uploads — typically primitive test servers or some legacy reverse proxies — file an issue with the response body, and we'll consider a non-chunked fallback in v0.3.
+
 ## Tools
+
+> **Default flow:** call `http_request` to get a schema + `cache_id`, then call `http_read` with a jq mask to extract only what you need. Keeps your context small even on multi-MB responses. Setting `include_body: true` is rarely the right call — see the tool description for cost framing.
 
 | Tool | What it does |
 |---|---|
