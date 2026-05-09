@@ -1,0 +1,1754 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rest-magpie — REST that picks only the shiny bits</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0a1828;
+    --navy-2: #0e2236;
+    --navy-3: #142e47;
+    --teal: #1a4a5e;
+    --cream: #f5e8d0;
+    --cream-2: #ede0c6;
+    --paper: #faf5ea;
+    --gold: #d4a84b;
+    --gold-bright: #e3bc63;
+    --gold-deep: #b08838;
+    --warn: #c25a4a;
+    --ink: #0a1828;
+    --ink-mute: #4a5a6e;
+    --line: rgba(10,24,40,0.10);
+    --line-on-dark: rgba(245,232,208,0.12);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+
+  /* dev-tool dotted/grid backdrops */
+  .dotgrid {
+    background-image: radial-gradient(rgba(10,24,40,0.10) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  a { color: inherit; }
+
+  /* ---------- top nav ---------- */
+  .nav {
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    color: var(--cream);
+    backdrop-filter: blur(8px);
+    background: linear-gradient(180deg, rgba(10,24,40,0.55), rgba(10,24,40,0.0));
+    transition: background .3s ease, color .3s ease;
+  }
+  .nav.is-light {
+    color: var(--ink);
+    background: rgba(250,245,234,0.86);
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(10px);
+  }
+  .nav-brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: -0.01em; font-size: 16px; }
+  .nav-brand .logo {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: var(--navy); display: grid; place-items: center;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.06) inset;
+  }
+  .nav.is-light .nav-brand .logo { background: var(--navy); }
+  .nav-links { display: flex; gap: 28px; font-size: 14px; opacity: .85; }
+  .nav-links a { text-decoration: none; }
+  .nav-links a:hover { opacity: 1; color: var(--gold-bright); }
+  .nav.is-light .nav-links a:hover { color: var(--gold-deep); }
+  .nav-cta {
+    font-size: 13px; padding: 8px 14px; border-radius: 999px;
+    border: 1px solid rgba(245,232,208,0.25);
+    text-decoration: none; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .nav.is-light .nav-cta { border-color: var(--line); }
+  .nav-cta:hover { border-color: var(--gold); color: var(--gold-bright); }
+  .nav.is-light .nav-cta:hover { color: var(--gold-deep); border-color: var(--gold); }
+
+  @media (max-width: 720px) {
+    .nav-links { display: none; }
+    .nav { padding: 14px 20px; }
+  }
+
+  /* ---------- HERO ---------- */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    color: var(--cream);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    isolation: isolate;
+  }
+  .hero-bg {
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(95deg, var(--navy) 0%, var(--navy-2) 24%, var(--teal) 58%, #c9b78c 82%, var(--cream) 100%);
+    z-index: -2;
+  }
+  .hero-banner {
+    position: absolute; inset: 0;
+    background-image: url("images/banner.png");
+    background-size: cover;
+    background-position: center;
+    z-index: -1;
+    opacity: .95;
+    mix-blend-mode: normal;
+  }
+  /* dim the cream side so headline reads */
+  .hero-bg-shade {
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(90deg, rgba(10,24,40,0.0) 0%, rgba(10,24,40,0.0) 38%, rgba(10,24,40,0.45) 62%, rgba(10,24,40,0.85) 100%);
+    z-index: -1;
+  }
+  .hero-grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(245,232,208,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(245,232,208,0.04) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: linear-gradient(90deg, transparent 0%, black 50%, black 100%);
+    z-index: -1;
+  }
+
+  .hero-inner {
+    width: 100%;
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 140px 32px 80px;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .hero-eyebrow {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px; letter-spacing: 0.06em;
+    color: var(--gold-bright);
+    padding: 6px 12px;
+    border: 1px solid rgba(212,168,75,0.35);
+    border-radius: 999px;
+    background: rgba(212,168,75,0.08);
+    width: fit-content;
+    margin-bottom: 28px;
+  }
+  .hero-eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 10px var(--gold); }
+
+  h1.hero-title {
+    font-size: clamp(44px, 7.2vw, 104px);
+    line-height: 0.96;
+    letter-spacing: -0.035em;
+    font-weight: 700;
+    margin: 0 0 28px;
+    max-width: 18ch;
+    text-wrap: balance;
+  }
+  h1.hero-title .pick { color: var(--gold-bright); font-style: italic; font-weight: 600; }
+  h1.hero-title .shiny {
+    background: linear-gradient(90deg, var(--gold-bright), #f0d68a, var(--gold));
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  p.hero-sub {
+    font-size: clamp(17px, 1.4vw, 21px);
+    line-height: 1.55;
+    max-width: 56ch;
+    margin: 0 0 40px;
+    color: rgba(245,232,208,0.86);
+    font-weight: 400;
+  }
+  p.hero-sub .num { color: var(--gold-bright); font-weight: 600; font-variant-numeric: tabular-nums; }
+  p.hero-sub strong { color: var(--cream); font-weight: 600; }
+
+  .hero-ctas { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 14px 22px;
+    border-radius: 12px;
+    font-size: 15px; font-weight: 500;
+    text-decoration: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: transform .15s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
+    font-family: inherit;
+  }
+  .btn-primary {
+    background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+    color: #2a1d05;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.4) inset, 0 10px 30px -10px rgba(212,168,75,0.6), 0 1px 2px rgba(0,0,0,0.1);
+    font-weight: 600;
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(255,255,255,0.5) inset, 0 14px 36px -10px rgba(212,168,75,0.75); }
+  .btn-ghost {
+    color: var(--cream);
+    border-color: rgba(245,232,208,0.28);
+    background: rgba(245,232,208,0.04);
+  }
+  .btn-ghost:hover { border-color: rgba(245,232,208,0.5); background: rgba(245,232,208,0.08); }
+
+  .hero-meta {
+    margin-top: 72px;
+    display: flex; gap: 36px; flex-wrap: wrap;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    color: rgba(245,232,208,0.55);
+    letter-spacing: 0.02em;
+  }
+  .hero-meta b { color: var(--gold-bright); font-weight: 500; }
+
+  .scroll-hint {
+    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px; letter-spacing: 0.2em;
+    color: rgba(245,232,208,0.45);
+    text-transform: uppercase;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .scroll-hint::after {
+    content: ""; width: 1px; height: 36px;
+    background: linear-gradient(180deg, rgba(245,232,208,0.5), transparent);
+    animation: scrollPulse 2.4s ease-in-out infinite;
+  }
+  @keyframes scrollPulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+  /* ---------- generic section ---------- */
+  section { padding: 120px 32px; position: relative; }
+  .container { max-width: 1240px; margin: 0 auto; }
+  .section-eyebrow {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--gold-deep);
+    margin-bottom: 14px;
+  }
+  .section-eyebrow.on-dark { color: var(--gold-bright); }
+  h2.section-title {
+    font-size: clamp(36px, 4.2vw, 60px);
+    line-height: 1.02;
+    letter-spacing: -0.025em;
+    font-weight: 700;
+    margin: 0 0 24px;
+    max-width: 22ch;
+    text-wrap: balance;
+  }
+  p.section-lede {
+    font-size: 19px;
+    line-height: 1.55;
+    color: var(--ink-mute);
+    max-width: 60ch;
+    margin: 0;
+  }
+
+  /* ---------- PAIN ---------- */
+  .pain { background: var(--paper); border-bottom: 1px solid var(--line); }
+  .pain-head { text-align: center; margin: 0 auto 64px; max-width: 760px; }
+  .pain-head h2 { margin-inline: auto; }
+  .pain-head p { margin-inline: auto; }
+  .pain-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+  }
+  .pain-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 36px;
+    position: relative;
+    overflow: hidden;
+  }
+  .pain-card::before {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 3px;
+    background: linear-gradient(90deg, var(--warn), transparent 80%);
+  }
+  .pain-card h3 {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--warn); margin: 0 0 24px; font-weight: 600;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .pain-card h3 .marker { width: 8px; height: 8px; background: var(--warn); border-radius: 2px; transform: rotate(45deg); }
+
+  .counter-row {
+    display: flex; align-items: baseline; gap: 16px; margin-bottom: 20px;
+  }
+  .counter {
+    font-family: "JetBrains Mono", monospace;
+    font-size: clamp(40px, 5vw, 60px);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .counter-unit { font-size: 18px; color: var(--ink-mute); font-family: "JetBrains Mono", monospace; }
+  .pain-card p {
+    color: var(--ink-mute); font-size: 15px; line-height: 1.6; margin: 0 0 24px;
+  }
+  .pain-card p .red { color: var(--warn); font-weight: 600; }
+
+  /* context bar viz */
+  .ctx-bar {
+    margin-top: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    background: #fbfaf6;
+  }
+  .ctx-bar-label {
+    display: flex; justify-content: space-between;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px; color: var(--ink-mute); margin-bottom: 8px;
+    letter-spacing: 0.04em;
+  }
+  .ctx-bar-track {
+    height: 14px; border-radius: 4px; background: #ece6d8; position: relative; overflow: hidden;
+  }
+  .ctx-bar-fill {
+    position: absolute; inset: 0 auto 0 0;
+    width: 0%;
+    background: repeating-linear-gradient(
+      45deg,
+      var(--warn) 0 8px,
+      #b04e3f 8px 16px
+    );
+    transition: width 1.6s cubic-bezier(.2,.7,.2,1);
+  }
+  .ctx-bar-fill::after {
+    content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(255,255,255,0.18), transparent);
+  }
+
+  /* permission dialog mock */
+  .perm-dialog {
+    margin-top: auto;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 12px 40px -20px rgba(10,24,40,0.18);
+    overflow: hidden;
+  }
+  .perm-titlebar {
+    display: flex; align-items: center; gap: 8px;
+    background: #f1ede2;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .perm-titlebar .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .perm-titlebar .dot.r { background: #ef766b; }
+  .perm-titlebar .dot.y { background: #e3bc63; }
+  .perm-titlebar .dot.g { background: #6cae6f; }
+  .perm-titlebar .label {
+    margin-left: 8px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px; color: var(--ink-mute);
+  }
+  .perm-body {
+    padding: 18px;
+    font-size: 14px; color: var(--ink);
+  }
+  .perm-body .q { margin-bottom: 4px; font-weight: 500; }
+  .perm-body .cmd {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    background: #f6f1e3;
+    padding: 8px 10px;
+    border-radius: 6px;
+    color: var(--ink-mute);
+    margin: 8px 0 16px;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .perm-body .cmd .url-changing {
+    background: rgba(194,90,74,0.18);
+    color: var(--warn);
+    padding: 1px 4px;
+    border-radius: 3px;
+    transition: background .3s ease;
+  }
+  .perm-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .perm-btn {
+    font-size: 12px; padding: 7px 12px; border-radius: 7px;
+    border: 1px solid var(--line); background: #fbfaf6;
+    font-family: inherit; cursor: pointer;
+  }
+  .perm-btn.primary { background: var(--navy); color: var(--cream); border-color: var(--navy); }
+
+  .pain-tagline {
+    margin-top: 56px;
+    text-align: center;
+    color: var(--ink-mute);
+    font-size: 17px;
+    max-width: 64ch;
+    margin-inline: auto;
+    line-height: 1.5;
+    font-style: italic;
+  }
+  .pain-tagline strong { color: var(--ink); font-style: normal; font-weight: 600; }
+
+  /* ---------- THE FIX ---------- */
+  .fix {
+    background: linear-gradient(180deg, var(--navy) 0%, var(--navy-2) 60%, var(--navy) 100%);
+    color: var(--cream);
+    border-bottom: 1px solid rgba(0,0,0,0.4);
+    overflow: hidden;
+  }
+  .fix::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(800px 400px at 12% 0%, rgba(212,168,75,0.10), transparent 60%),
+      radial-gradient(700px 400px at 90% 100%, rgba(26,74,94,0.7), transparent 60%);
+  }
+  .fix .container { position: relative; }
+  .fix-head { text-align: center; max-width: 820px; margin: 0 auto 80px; }
+  .fix-head h2 { color: var(--cream); margin-inline: auto; }
+  .fix-head h2 .gold { color: var(--gold-bright); }
+  .fix-head p { color: rgba(245,232,208,0.66); font-size: 19px; margin-inline: auto; max-width: 60ch; line-height: 1.5; }
+
+  .flow {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto 1fr;
+    gap: 0;
+    align-items: stretch;
+    margin-bottom: 80px;
+  }
+  .flow-step {
+    background: rgba(245,232,208,0.04);
+    border: 1px solid var(--line-on-dark);
+    border-radius: 16px;
+    padding: 28px;
+    position: relative;
+  }
+  .flow-step .num {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: var(--gold-bright);
+    letter-spacing: 0.18em;
+    margin-bottom: 12px;
+  }
+  .flow-step .name {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 18px;
+    color: var(--cream);
+    margin-bottom: 10px;
+    font-weight: 500;
+  }
+  .flow-step .name .punct { color: var(--gold-bright); }
+  .flow-step .desc { font-size: 14px; color: rgba(245,232,208,0.62); line-height: 1.55; margin-bottom: 16px; }
+  .flow-step .codelet {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    background: rgba(10,24,40,0.5);
+    border: 1px solid rgba(245,232,208,0.06);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: rgba(245,232,208,0.82);
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .flow-step .codelet .k { color: var(--gold-bright); }
+  .flow-step .codelet .s { color: #a3c8d6; }
+  .flow-step .codelet .c { color: rgba(245,232,208,0.4); }
+  .flow-arrow {
+    display: grid; place-items: center;
+    width: 56px;
+    color: var(--gold);
+    opacity: 0.7;
+  }
+  .flow-arrow svg { width: 56px; height: 18px; }
+
+  @media (max-width: 980px) {
+    .flow { grid-template-columns: 1fr; gap: 16px; }
+    .flow-arrow { width: 100%; transform: rotate(90deg); height: 24px; }
+  }
+
+  /* comparison */
+  .compare {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr;
+    background: rgba(245,232,208,0.04);
+    border: 1px solid var(--line-on-dark);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .compare > div { padding: 22px 28px; border-bottom: 1px solid var(--line-on-dark); display: flex; align-items: center; }
+  .compare > div:nth-last-child(-n+3) { border-bottom: none; }
+  .compare .col-h {
+    background: rgba(10,24,40,0.5);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(245,232,208,0.6);
+  }
+  .compare .col-h.with { color: var(--gold-bright); }
+  .compare .label { color: rgba(245,232,208,0.86); font-size: 15px; }
+  .compare .num {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+    color: var(--cream);
+    justify-content: flex-end;
+  }
+  .compare .num.win { color: var(--gold-bright); font-weight: 600; }
+  .compare .num.muted { color: rgba(245,232,208,0.4); text-decoration: line-through; text-decoration-color: rgba(194,90,74,0.6); text-decoration-thickness: 2px; }
+
+  .fix-foot {
+    margin-top: 28px;
+    text-align: center;
+    color: rgba(245,232,208,0.7);
+    font-size: 16px;
+  }
+  .fix-foot strong { color: var(--gold-bright); font-weight: 500; }
+
+  @media (max-width: 720px) {
+    .compare { grid-template-columns: 1fr; }
+    .compare > div { border-bottom: 1px solid var(--line-on-dark); }
+    .compare .num { justify-content: flex-start; }
+    .compare > div:nth-last-child(-n+3) { border-bottom: 1px solid var(--line-on-dark); }
+  }
+
+  /* ---------- SCHEMA FORMATS ---------- */
+  .schema {
+    background: var(--paper);
+  }
+  .schema-head { max-width: 760px; margin: 0 0 56px; }
+  .schema-shell {
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: #fff;
+    overflow: hidden;
+    box-shadow: 0 30px 80px -40px rgba(10,24,40,0.15);
+  }
+  .schema-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--line);
+    background: #fbf6e9;
+    overflow-x: auto;
+  }
+  .schema-tab {
+    padding: 18px 24px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px;
+    color: var(--ink-mute);
+    background: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    white-space: nowrap;
+    transition: color .15s ease;
+    font-weight: 500;
+  }
+  .schema-tab[aria-selected="true"] { color: var(--ink); }
+  .schema-tab[aria-selected="true"]::after {
+    content: ""; position: absolute; inset: auto 16px 0 16px; height: 2px; background: var(--gold);
+  }
+  .schema-tab:hover { color: var(--ink); }
+
+  .schema-body {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    min-height: 420px;
+  }
+  .schema-code {
+    background: var(--navy);
+    color: var(--cream);
+    padding: 32px 36px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13.5px;
+    line-height: 1.7;
+    overflow: auto;
+    position: relative;
+  }
+  .schema-code::before {
+    content: ""; position: absolute; inset: 0;
+    background:
+      linear-gradient(180deg, rgba(212,168,75,0.04), transparent 30%);
+    pointer-events: none;
+  }
+  .schema-code pre { margin: 0; white-space: pre; }
+  .schema-code .k { color: var(--gold-bright); }
+  .schema-code .t { color: #b1d6c6; }
+  .schema-code .s { color: #d8b889; }
+  .schema-code .n { color: #f0c987; }
+  .schema-code .c { color: rgba(245,232,208,0.42); }
+  .schema-code .p { color: rgba(245,232,208,0.6); }
+
+  .schema-side {
+    padding: 36px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    background: #fdfaf2;
+  }
+  .schema-side h4 {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--gold-deep);
+    margin: 0;
+    font-weight: 600;
+  }
+  .schema-side h3 {
+    font-size: 26px;
+    letter-spacing: -0.02em;
+    margin: -10px 0 0;
+    font-weight: 600;
+  }
+  .schema-side .when {
+    color: var(--ink-mute);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .schema-side .when strong { color: var(--ink); font-weight: 600; }
+  .schema-side .stats {
+    margin-top: auto;
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    border-top: 1px dashed var(--line);
+    padding-top: 18px;
+  }
+  .schema-side .stat-label {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px; letter-spacing: 0.06em; color: var(--ink-mute); text-transform: uppercase;
+  }
+  .schema-side .stat-val {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px; color: var(--ink); font-weight: 500;
+  }
+  .schema-side .stat-val .gold { color: var(--gold-deep); }
+
+  @media (max-width: 880px) {
+    .schema-body { grid-template-columns: 1fr; }
+    .schema-code { padding: 24px; font-size: 12.5px; }
+  }
+
+  /* ---------- INSTALL (centerpiece) ---------- */
+  .install {
+    background:
+      linear-gradient(180deg, var(--navy) 0%, #050d18 100%);
+    color: var(--cream);
+    padding: 140px 32px 140px;
+    position: relative;
+  }
+  .install::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image: radial-gradient(rgba(245,232,208,0.06) 1px, transparent 1px);
+    background-size: 24px 24px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, black, transparent 80%);
+  }
+  .install .container { position: relative; max-width: 1320px; }
+  .install-head {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 32px;
+    margin: 0 0 48px;
+  }
+  .install-head .lhs { max-width: 720px; }
+  .install-head h2 { color: var(--cream); margin: 0; }
+  .install-head h2 .gold { color: var(--gold-bright); }
+  .install-head p { color: rgba(245,232,208,0.66); font-size: 18px; max-width: 56ch; line-height: 1.5; margin: 16px 0 0; }
+  .install-head .step-pill {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    color: var(--gold-bright);
+    border: 1px solid rgba(212,168,75,0.4);
+    padding: 8px 14px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .install-shell {
+    background: #060f1c;
+    border: 1px solid rgba(245,232,208,0.10);
+    box-shadow:
+      0 1px 0 rgba(245,232,208,0.05) inset,
+      0 60px 120px -40px rgba(0,0,0,0.6),
+      0 0 0 1px rgba(0,0,0,0.4);
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 280px 1fr;
+  }
+
+  /* IDE-style chrome bar */
+  .install-chrome {
+    grid-column: 1 / -1;
+    display: flex; align-items: center;
+    padding: 12px 18px;
+    border-bottom: 1px solid rgba(245,232,208,0.08);
+    background: rgba(0,0,0,0.4);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    color: rgba(245,232,208,0.5);
+    gap: 12px;
+  }
+  .install-chrome .dots { display: flex; gap: 6px; }
+  .install-chrome .dots span { width: 10px; height: 10px; border-radius: 50%; }
+  .install-chrome .dots span:nth-child(1) { background: #ef766b; }
+  .install-chrome .dots span:nth-child(2) { background: #e3bc63; }
+  .install-chrome .dots span:nth-child(3) { background: #6cae6f; }
+  .install-chrome .breadcrumb { margin-left: 8px; }
+  .install-chrome .breadcrumb b { color: var(--gold-bright); font-weight: 500; }
+  .install-chrome .right { margin-left: auto; display: flex; gap: 16px; align-items: center; }
+  .install-chrome .right span::before { content: "●"; color: #6cae6f; margin-right: 6px; font-size: 8px; vertical-align: 2px; }
+
+  /* Sidebar — file tree of clients */
+  .install-sidebar {
+    border-right: 1px solid rgba(245,232,208,0.08);
+    padding: 18px 0;
+    background: rgba(0,0,0,0.25);
+    min-height: 520px;
+  }
+  .install-sidebar .group-label {
+    padding: 8px 18px 6px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(245,232,208,0.4);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .install-sidebar .group-label .chev { color: rgba(245,232,208,0.55); }
+
+  .install-tabs {
+    display: flex;
+    flex-direction: column;
+  }
+  .install-tab {
+    padding: 11px 18px 11px 30px;
+    font-size: 13.5px;
+    color: rgba(245,232,208,0.6);
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    display: flex; align-items: center; gap: 12px;
+    position: relative;
+    border-left: 2px solid transparent;
+    transition: all .12s ease;
+  }
+  .install-tab:hover { color: var(--cream); background: rgba(245,232,208,0.03); }
+  .install-tab[aria-selected="true"] {
+    color: var(--cream);
+    background: rgba(212,168,75,0.10);
+    border-left-color: var(--gold-bright);
+  }
+  .install-tab .icon {
+    width: 22px; height: 22px;
+    display: grid; place-items: center;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    font-weight: 700;
+    background: rgba(245,232,208,0.06);
+    color: var(--gold-bright);
+    border: 1px solid rgba(245,232,208,0.08);
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .install-tab[aria-selected="true"] .icon { background: rgba(212,168,75,0.18); border-color: rgba(212,168,75,0.4); }
+  .install-tab .meta {
+    margin-left: auto;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    color: rgba(245,232,208,0.35);
+  }
+
+  /* Main panel */
+  .install-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .install-filebar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 22px;
+    border-bottom: 1px solid rgba(245,232,208,0.08);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    color: rgba(245,232,208,0.55);
+    background: rgba(0,0,0,0.15);
+  }
+  .install-filebar .file-path { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .install-filebar .file-path .pin { color: var(--gold-bright); flex-shrink: 0; }
+  .install-filebar .file-path #install-filename { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .copy-btn {
+    background: rgba(245,232,208,0.06);
+    border: 1px solid rgba(245,232,208,0.14);
+    color: rgba(245,232,208,0.86);
+    padding: 6px 12px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px;
+    transition: all .15s ease;
+    flex-shrink: 0;
+  }
+  .copy-btn:hover { color: var(--cream); border-color: var(--gold); background: rgba(212,168,75,0.1); }
+  .copy-btn.copied { color: var(--gold-bright); border-color: var(--gold); background: rgba(212,168,75,0.15); }
+  .copy-btn svg { width: 12px; height: 12px; }
+
+  pre.install-code {
+    margin: 0;
+    padding: 28px 32px 32px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14.5px;
+    line-height: 1.75;
+    overflow-x: auto;
+    color: var(--cream);
+    background: transparent;
+    flex: 1;
+  }
+  pre.install-code .k { color: var(--gold-bright); }
+  pre.install-code .s { color: #d8b889; }
+  pre.install-code .c { color: rgba(245,232,208,0.42); font-style: italic; }
+  pre.install-code .p { color: rgba(245,232,208,0.5); }
+  pre.install-code .ln {
+    display: inline-block; width: 28px; color: rgba(245,232,208,0.22);
+    text-align: right; padding-right: 16px; user-select: none;
+  }
+
+  /* status footer inside shell */
+  .install-status {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 18px;
+    border-top: 1px solid rgba(245,232,208,0.08);
+    background: rgba(212,168,75,0.06);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11.5px;
+    color: rgba(245,232,208,0.6);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .install-status .ok { color: var(--gold-bright); }
+  .install-status .ok::before { content: "✓"; margin-right: 6px; }
+  .install-status .item { display: inline-flex; align-items: center; gap: 6px; }
+  .install-status .item b { color: var(--cream); font-weight: 500; }
+
+  /* Below shell — npm/docker quick row */
+  .install-quick {
+    margin-top: 28px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .install-quick .quick {
+    background: rgba(245,232,208,0.03);
+    border: 1px solid rgba(245,232,208,0.08);
+    padding: 18px 22px;
+  }
+  .install-quick .quick-head {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px; color: rgba(245,232,208,0.5);
+    letter-spacing: 0.1em; text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .install-quick .quick-head .tag { color: var(--gold-bright); }
+  .install-quick .quick code {
+    display: block;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px;
+    color: var(--cream);
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .install-quick .quick code .prompt { color: var(--gold-bright); margin-right: 10px; user-select: none; }
+  .install-quick .quick code .arg { color: #d8b889; }
+
+  .install-foot {
+    margin-top: 56px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 24px;
+    align-items: center;
+    padding: 24px 28px;
+    border: 1px solid rgba(212,168,75,0.25);
+    background: rgba(212,168,75,0.05);
+  }
+  .install-foot .key {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: var(--gold-bright);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    border-right: 1px solid rgba(212,168,75,0.3);
+    padding-right: 24px;
+  }
+  .install-foot .body {
+    color: rgba(245,232,208,0.85); font-size: 15px; line-height: 1.55;
+  }
+  .install-foot .body strong { color: var(--gold-bright); font-weight: 500; }
+
+  @media (max-width: 880px) {
+    .install-shell { grid-template-columns: 1fr; }
+    .install-sidebar { min-height: 0; padding: 8px 0; }
+    .install-tabs { flex-direction: row; overflow-x: auto; }
+    .install-tab { padding: 10px 14px; border-left: none; border-bottom: 2px solid transparent; }
+    .install-tab[aria-selected="true"] { border-bottom-color: var(--gold-bright); border-left-color: transparent; }
+    .install-tab .meta { display: none; }
+    .install-quick { grid-template-columns: 1fr; }
+    .install-head { grid-template-columns: 1fr; }
+    .install-foot { grid-template-columns: 1fr; }
+    .install-foot .key { border-right: none; padding-right: 0; padding-bottom: 8px; border-bottom: 1px solid rgba(212,168,75,0.2); }
+  }
+
+  /* ---------- FOOTER ---------- */
+  footer {
+    background: #07101c;
+    color: rgba(245,232,208,0.7);
+    padding: 80px 32px 32px;
+    border-top: 1px solid rgba(245,232,208,0.08);
+  }
+  .footer-grid {
+    max-width: 1240px; margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr;
+    gap: 48px;
+  }
+  .footer-brand .logo-row { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .footer-brand .logo-row .mark {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: rgba(245,232,208,0.06);
+    display: grid; place-items: center;
+    border: 1px solid var(--line-on-dark);
+  }
+  .footer-brand h4 { font-size: 18px; color: var(--cream); margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+  .footer-tag { font-style: italic; color: rgba(245,232,208,0.55); font-size: 14px; margin-bottom: 22px; max-width: 36ch; line-height: 1.55; }
+  .footer-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge-pill {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line-on-dark);
+    color: rgba(245,232,208,0.7);
+    display: inline-flex; align-items: center; gap: 6px;
+    text-decoration: none;
+  }
+  .badge-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold-bright); }
+  .badge-pill.mit .dot { background: #6cae6f; }
+
+  .footer-col h5 {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--gold-bright);
+    margin: 0 0 18px;
+    font-weight: 600;
+  }
+  .footer-col a {
+    display: block; text-decoration: none;
+    color: rgba(245,232,208,0.7);
+    font-size: 14px;
+    margin-bottom: 10px;
+    transition: color .15s ease;
+  }
+  .footer-col a:hover { color: var(--gold-bright); }
+
+  .footer-strip {
+    max-width: 1240px;
+    margin: 56px auto 0;
+    padding-top: 24px;
+    border-top: 1px solid rgba(245,232,208,0.08);
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    color: rgba(245,232,208,0.4);
+  }
+  .footer-strip .sep { opacity: 0.4; margin: 0 6px; }
+
+  @media (max-width: 880px) {
+    .footer-grid { grid-template-columns: 1fr; gap: 32px; }
+    .pain-grid { grid-template-columns: 1fr; }
+    section { padding: 80px 24px; }
+    .hero-inner { padding: 120px 24px 60px; }
+    .schema-side h3 { font-size: 22px; }
+  }
+
+  /* tiny mascot */
+  .mascot {
+    display: block;
+    margin: 0 auto 12px;
+    width: 56px; height: 56px;
+    background: url("images/logo.png") center / contain no-repeat;
+    opacity: 0.85;
+    filter: drop-shadow(0 4px 12px rgba(10,24,40,0.15));
+  }
+  .mascot.on-dark { filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4)) brightness(1.15); }
+
+  /* fade-in */
+  .fade-in { opacity: 0; transform: translateY(20px); transition: opacity .8s ease, transform .8s ease; }
+  .fade-in.is-visible { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- ============= NAV ============= -->
+<nav class="nav" id="nav">
+  <a href="#top" class="nav-brand" style="text-decoration:none;">
+    <span class="logo">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d4a84b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 17 L8 8 L13 14 L21 5"/>
+        <circle cx="8" cy="8" r="1.6" fill="#d4a84b" stroke="none"/>
+      </svg>
+    </span>
+    rest-magpie
+  </a>
+  <div class="nav-links">
+    <a href="#pain">The pain</a>
+    <a href="#fix">The fix</a>
+    <a href="#schemas">Schemas</a>
+    <a href="#install">Install</a>
+  </div>
+  <a class="nav-cta" href="https://github.com/ed-smartass/rest-magpie" target="_blank" rel="noopener">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2c-3.2.7-3.87-1.36-3.87-1.36-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.69 1.25 3.34.96.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.27-5.24-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.15 1.17.91-.25 1.89-.38 2.86-.39.97.01 1.95.13 2.86.39 2.18-1.48 3.14-1.17 3.14-1.17.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.07 0 4.4-2.69 5.36-5.25 5.65.41.35.78 1.05.78 2.12v3.14c0 .31.21.67.8.56C20.22 21.39 23.5 17.07 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
+    GitHub
+  </a>
+</nav>
+
+<a id="top"></a>
+
+<!-- ============= HERO ============= -->
+<header class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-banner"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-bg-shade"></div>
+
+  <div class="hero-inner">
+    <span class="hero-eyebrow">
+      <span class="dot"></span>
+      MCP server &middot; v0.1.1 &middot; npm + Docker
+    </span>
+
+    <h1 class="hero-title">
+      REST that picks<br>
+      only the <span class="shiny">shiny bits.</span>
+    </h1>
+
+    <p class="hero-sub">
+      Your agent burned <span class="num">12,400 tokens</span> on a 200&nbsp;KB JSON to read one field.<br>
+      With <strong>rest-magpie</strong>, the same field costs <span class="num">~200 tokens</span>.
+    </p>
+
+    <div class="hero-ctas">
+      <a class="btn btn-primary" href="#install">
+        Install for Claude Desktop
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></svg>
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/ed-smartass/rest-magpie" target="_blank" rel="noopener">
+        View on GitHub
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg>
+      </a>
+    </div>
+
+    <div class="hero-meta">
+      <span><b>npx -y rest-magpie</b> &nbsp;·&nbsp; one config block</span>
+      <span><b>MIT</b> &nbsp;·&nbsp; ~10ms overhead</span>
+      <span><b>schema-first</b> &nbsp;·&nbsp; jq-filtered</span>
+    </div>
+  </div>
+
+  <div class="scroll-hint">scroll</div>
+</header>
+
+<!-- ============= PAIN ============= -->
+<section class="pain" id="pain">
+  <div class="container">
+    <div class="pain-head fade-in">
+      <div class="section-eyebrow">§ 01 &middot; The pain</div>
+      <h2 class="section-title">Two daily papercuts.</h2>
+      <p class="section-lede">Both come from the same place: HTTP for agents was retrofitted from HTTP for humans. Here's how it shows up.</p>
+    </div>
+
+    <div class="pain-grid">
+
+      <!-- LEFT: token blowup -->
+      <article class="pain-card fade-in">
+        <h3><span class="marker"></span>Without rest-magpie</h3>
+        <div class="counter-row">
+          <span class="counter" data-counter="200847">0</span>
+          <span class="counter-unit">bytes</span>
+        </div>
+        <p>
+          <span class="red">12,400 tokens</span> consumed to fetch one paginated list — most of it whitespace and fields the agent never touched.
+        </p>
+        <p>
+          Context window: <span class="red">80% full</span> after a single call. The next reasoning step has to evict what mattered.
+        </p>
+
+        <div class="ctx-bar">
+          <div class="ctx-bar-label">
+            <span>agent context window</span>
+            <span><span data-ctx-pct>0</span>% used</span>
+          </div>
+          <div class="ctx-bar-track">
+            <div class="ctx-bar-fill" data-ctx-fill></div>
+          </div>
+        </div>
+      </article>
+
+      <!-- RIGHT: permission spam -->
+      <article class="pain-card fade-in">
+        <h3><span class="marker"></span>And every curl prompt</h3>
+        <div class="counter-row">
+          <span class="counter" data-counter="50">0</span>
+          <span class="counter-unit">dialogs &middot; per session</span>
+        </div>
+        <p>
+          You clicked <span class="red">Always</span> last call. The next URL has a different path, so the prompt fires again.
+        </p>
+
+        <div class="perm-dialog" aria-hidden="true">
+          <div class="perm-titlebar">
+            <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+            <span class="label">~ permission required</span>
+          </div>
+          <div class="perm-body">
+            <div class="q">Allow Bash command?</div>
+            <div class="cmd">curl https://api.example.com/v2/<span class="url-changing" data-url-swap>users/42</span></div>
+            <div class="perm-actions">
+              <button class="perm-btn">Always</button>
+              <button class="perm-btn">Once</button>
+              <button class="perm-btn primary">Deny</button>
+            </div>
+          </div>
+        </div>
+      </article>
+
+    </div>
+
+    <p class="pain-tagline fade-in">
+      Two pains. Same root cause: <strong>HTTP for agents was never designed for agents.</strong>
+    </p>
+  </div>
+</section>
+
+
+<!-- ============= FIX ============= -->
+<section class="fix" id="fix">
+  <div class="container">
+    <div class="fix-head fade-in">
+      <div class="section-eyebrow on-dark">§ 02 &middot; The fix</div>
+      <h2 class="section-title">One MCP server. <span class="gold">Both pains gone.</span></h2>
+      <p>A schema-first wrapper around HTTP. The agent sees structure first, then pulls only the fields it actually needs.</p>
+    </div>
+
+    <!-- 3-step flow -->
+    <div class="flow">
+      <div class="flow-step fade-in">
+        <div class="num">01 / FETCH</div>
+        <div class="name">http_request<span class="punct">()</span></div>
+        <div class="desc">Agent calls the endpoint. Body is fetched once and held in cache — never streamed into context.</div>
+        <div class="codelet"><span class="c">// agent →</span>
+<span class="k">http_request</span>({
+  url: <span class="s">"…/v1/users"</span>
+})</div>
+      </div>
+
+      <div class="flow-arrow" aria-hidden="true">
+        <svg viewBox="0 0 56 18"><path d="M2 9 L48 9 M40 3 L52 9 L40 15" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+      <div class="flow-step fade-in">
+        <div class="num">02 / SCHEMA</div>
+        <div class="name">paths · shape · sample · json_schema</div>
+        <div class="desc">Server returns a compact map of the response: paths, types, one example per leaf. Body stays cached.</div>
+        <div class="codelet"><span class="c">// → ~200 tokens</span>
+<span class="k">data</span>[].id    : int
+<span class="k">data</span>[].name  : string
+<span class="k">meta</span>.total  : int</div>
+      </div>
+
+      <div class="flow-arrow" aria-hidden="true">
+        <svg viewBox="0 0 56 18"><path d="M2 9 L48 9 M40 3 L52 9 L40 15" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+      <div class="flow-step fade-in">
+        <div class="num">03 / JQ MASK</div>
+        <div class="name">http_read<span class="punct">()</span></div>
+        <div class="desc">Agent asks for exactly the slice it wanted via a jq mask. Only that slice enters the context window.</div>
+        <div class="codelet"><span class="c">// pluck one field</span>
+<span class="k">http_read</span>({
+  mask: <span class="s">".meta.total"</span>
+})
+<span class="c">// → 1247</span></div>
+      </div>
+    </div>
+
+    <!-- comparison -->
+    <div class="compare fade-in">
+      <div class="col-h">&nbsp;</div>
+      <div class="col-h">Without</div>
+      <div class="col-h with">With rest-magpie</div>
+
+      <div class="label">Tokens to context window</div>
+      <div class="num muted">12,400</div>
+      <div class="num win">~ 200</div>
+
+      <div class="label">Permission prompts (50 calls)</div>
+      <div class="num muted">50</div>
+      <div class="num win">1</div>
+
+      <div class="label">Latency overhead</div>
+      <div class="num">0&nbsp;ms</div>
+      <div class="num">~ 10&nbsp;ms</div>
+    </div>
+
+    <p class="fix-foot fade-in">
+      Authorize the MCP server <strong>once</strong> at config time. After that, no per-call permission prompts.
+    </p>
+  </div>
+</section>
+
+
+<!-- ============= SCHEMAS ============= -->
+<section class="schema" id="schemas">
+  <div class="container">
+    <div class="schema-head fade-in">
+      <div class="section-eyebrow">§ 03 &middot; Schema formats</div>
+      <h2 class="section-title">Same response. Four ways to look at it.</h2>
+      <p class="section-lede">Pick the rendering that matches what your agent is doing — flat field listing, nested shape, realistic sample, or strict JSON Schema.</p>
+    </div>
+
+    <div class="schema-shell fade-in">
+      <div class="schema-tabs" role="tablist" id="schema-tabs">
+        <button class="schema-tab" role="tab" data-tab="paths" aria-selected="true">paths</button>
+        <button class="schema-tab" role="tab" data-tab="shape" aria-selected="false">shape</button>
+        <button class="schema-tab" role="tab" data-tab="sample" aria-selected="false">sample</button>
+        <button class="schema-tab" role="tab" data-tab="json_schema" aria-selected="false">json_schema</button>
+      </div>
+
+      <div class="schema-body">
+        <div class="schema-code">
+          <pre id="schema-pre"></pre>
+        </div>
+        <aside class="schema-side">
+          <h4 id="schema-fmt">format · paths</h4>
+          <h3 id="schema-headline">A flat field listing with types.</h3>
+          <p class="when" id="schema-when"></p>
+          <div class="stats">
+            <div class="stat-label">response size</div>
+            <div class="stat-val">187&nbsp;KB</div>
+            <div class="stat-label">items in <span class="mono">data[]</span></div>
+            <div class="stat-val">50</div>
+            <div class="stat-label">tokens to context</div>
+            <div class="stat-val"><span class="gold">~ 200</span></div>
+            <div class="stat-label">cached for</div>
+            <div class="stat-val">10&nbsp;min</div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============= INSTALL ============= -->
+<section class="install" id="install">
+  <div class="container">
+    <div class="install-head fade-in">
+      <div class="lhs">
+        <div class="section-eyebrow on-dark">§ 04 &middot; Install</div>
+        <h2 class="section-title">Drop one block. <span class="gold">You're done.</span></h2>
+        <p>One config object, one MCP authorization. Pick your client on the left — <span class="mono">npx -y rest-magpie</span> is the same everywhere; only the surrounding schema differs.</p>
+      </div>
+      <div class="step-pill">→ paste · save · restart</div>
+    </div>
+
+    <div class="install-shell fade-in">
+      <!-- IDE chrome -->
+      <div class="install-chrome">
+        <span class="dots"><span></span><span></span><span></span></span>
+        <span class="breadcrumb">~/<b>rest-magpie</b>/install</span>
+        <span class="right">
+          <span>mcp · stdio</span>
+        </span>
+      </div>
+
+      <!-- Sidebar -->
+      <aside class="install-sidebar">
+        <div class="group-label"><span class="chev">▾</span> mcp clients</div>
+        <div class="install-tabs" role="tablist" id="install-tabs">
+          <button class="install-tab" role="tab" data-client="claude-desktop" aria-selected="true">
+            <span class="icon">CD</span><span>Claude Desktop</span><span class="meta">json</span>
+          </button>
+          <button class="install-tab" role="tab" data-client="claude-code">
+            <span class="icon">CC</span><span>Claude Code</span><span class="meta">json</span>
+          </button>
+          <button class="install-tab" role="tab" data-client="vscode">
+            <span class="icon">VS</span><span>VS Code</span><span class="meta">json</span>
+          </button>
+          <button class="install-tab" role="tab" data-client="cursor">
+            <span class="icon">CU</span><span>Cursor</span><span class="meta">json</span>
+          </button>
+          <button class="install-tab" role="tab" data-client="cline">
+            <span class="icon">CL</span><span>Cline</span><span class="meta">json</span>
+          </button>
+          <button class="install-tab" role="tab" data-client="windsurf">
+            <span class="icon">WS</span><span>Windsurf</span><span class="meta">json</span>
+          </button>
+        </div>
+        <div class="group-label" style="margin-top: 14px;"><span class="chev">▾</span> container</div>
+        <div class="install-tabs">
+          <button class="install-tab" role="tab" data-client="docker">
+            <span class="icon">DK</span><span>Docker (GHCR)</span><span class="meta">json</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- Main panel -->
+      <div class="install-main">
+        <div class="install-filebar">
+          <span class="file-path"><span class="pin">▸</span> <span id="install-filename">claude_desktop_config.json</span></span>
+          <button class="copy-btn" id="copy-config">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span>Copy</span>
+          </button>
+        </div>
+        <pre class="install-code" id="install-code"></pre>
+      </div>
+
+      <!-- Status bar -->
+      <div class="install-status">
+        <span class="item ok">authorized once</span>
+        <span class="item"><b>0</b> per-call prompts</span>
+        <span class="item"><b>~10ms</b> overhead</span>
+        <span class="item"><b>50&nbsp;MB</b> response cap</span>
+        <span class="item"><b>10&nbsp;min</b> cache TTL</span>
+      </div>
+    </div>
+
+    <!-- npm + docker quick row -->
+    <div class="install-quick fade-in">
+      <div class="quick">
+        <div class="quick-head"><span>npm</span><span class="tag">recommended</span></div>
+        <code><span class="prompt">$</span>npx -y <span class="arg">rest-magpie</span></code>
+      </div>
+      <div class="quick">
+        <div class="quick-head"><span>docker</span><span class="tag">ghcr</span></div>
+        <code><span class="prompt">$</span>docker run -i --rm <span class="arg">ghcr.io/ed-smartass/rest-magpie</span></code>
+      </div>
+    </div>
+
+    <p class="install-foot fade-in">
+      <span class="key">// note</span>
+      <span class="body">After this, <strong>no per-call permission prompts</strong>. The MCP server is authorized once at config time and that grant covers every subsequent <span class="mono">http_request</span> / <span class="mono">http_read</span> the agent makes.</span>
+    </p>
+  </div>
+</section>
+
+
+<!-- ============= FOOTER ============= -->
+<footer>
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <div class="logo-row">
+        <span class="mark">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d4a84b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 17 L8 8 L13 14 L21 5"/>
+            <circle cx="8" cy="8" r="1.6" fill="#d4a84b" stroke="none"/>
+          </svg>
+        </span>
+        <h4>rest-magpie</h4>
+      </div>
+      <p class="footer-tag">REST that picks only the shiny bits — schema-first MCP wrapper for arbitrary HTTP, with jq-filtered reads.</p>
+      <div class="footer-badges">
+        <a class="badge-pill mit" href="https://github.com/ed-smartass/rest-magpie/blob/main/LICENSE" target="_blank" rel="noopener"><span class="dot"></span>MIT License</a>
+        <a class="badge-pill" href="https://github.com/ed-smartass/rest-magpie" target="_blank" rel="noopener"><span class="dot"></span><span id="stars-count">★ GitHub</span></a>
+      </div>
+    </div>
+
+    <div class="footer-col">
+      <h5>Project</h5>
+      <a href="https://github.com/ed-smartass/rest-magpie/blob/main/docs/specs/2026-05-09-rest-magpie-design.md" target="_blank" rel="noopener">Design spec</a>
+      <a href="https://github.com/ed-smartass/rest-magpie/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a>
+      <a href="https://github.com/ed-smartass/rest-magpie/issues" target="_blank" rel="noopener">Issues</a>
+      <a href="https://github.com/ed-smartass/rest-magpie/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+    </div>
+
+    <div class="footer-col">
+      <h5>Made by</h5>
+      <a href="https://github.com/ed-smartass" target="_blank" rel="noopener">@ed-smartass on GitHub</a>
+      <a href="https://www.npmjs.com/package/rest-magpie" target="_blank" rel="noopener">rest-magpie on npm</a>
+      <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">Model Context Protocol</a>
+    </div>
+  </div>
+
+  <div class="footer-strip">
+    <div>
+      <span>v0.1.1</span><span class="sep">·</span>
+      <span>npm</span><span class="sep">·</span>
+      <span>Docker (GHCR)</span>
+    </div>
+    <div>built for agents that read one field at a time</div>
+  </div>
+</footer>
+
+
+<!-- ============= SCRIPTS ============= -->
+<script>
+(() => {
+  /* ---------- nav state ---------- */
+  const nav = document.getElementById('nav');
+  const onScroll = () => {
+    const y = window.scrollY;
+    const heroH = document.querySelector('.hero').offsetHeight;
+    nav.classList.toggle('is-light', y > heroH - 120);
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  /* ---------- intersection-triggered effects ---------- */
+  const fadeEls = document.querySelectorAll('.fade-in');
+  const fadeIO = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('is-visible');
+        fadeIO.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -60px 0px' });
+  fadeEls.forEach(el => fadeIO.observe(el));
+
+  /* ---------- counters ---------- */
+  const counters = document.querySelectorAll('[data-counter]');
+  const animateCount = (el) => {
+    const target = parseInt(el.dataset.counter, 10);
+    const dur = 1600;
+    const start = performance.now();
+    const startVal = 0;
+    const fmt = new Intl.NumberFormat('en-US');
+    const tick = (t) => {
+      const p = Math.min(1, (t - start) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      const v = Math.round(startVal + (target - startVal) * eased);
+      el.textContent = fmt.format(v);
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  };
+  const countIO = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        animateCount(e.target);
+        countIO.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.6 });
+  counters.forEach(c => countIO.observe(c));
+
+  /* ---------- context bar fill ---------- */
+  const ctxFill = document.querySelector('[data-ctx-fill]');
+  const ctxPct = document.querySelector('[data-ctx-pct]');
+  const ctxIO = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        // animate to 80%
+        ctxFill.style.width = '80%';
+        // animate the percentage label
+        const start = performance.now();
+        const dur = 1600;
+        const tick = (t) => {
+          const p = Math.min(1, (t - start) / dur);
+          const eased = 1 - Math.pow(1 - p, 3);
+          ctxPct.textContent = Math.round(80 * eased);
+          if (p < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+        ctxIO.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.5 });
+  if (ctxFill) ctxIO.observe(ctxFill);
+
+  /* ---------- swapping URL in permission dialog ---------- */
+  const urlSwap = document.querySelector('[data-url-swap]');
+  if (urlSwap) {
+    const urls = ['users/42', 'orgs/acme/repos', 'issues?state=open', 'projects/7/items', 'commits?since=2026-05'];
+    let i = 0;
+    setInterval(() => {
+      i = (i + 1) % urls.length;
+      urlSwap.style.opacity = '0.2';
+      setTimeout(() => {
+        urlSwap.textContent = urls[i];
+        urlSwap.style.opacity = '1';
+      }, 180);
+    }, 1800);
+  }
+
+  /* ---------- schema tabs ---------- */
+  const SCHEMAS = {
+    paths: {
+      headline: 'A flat field listing with types.',
+      when: 'Pick when you want a quick map of <strong>what fields exist</strong> and what they hold — best for agents about to write a jq mask.',
+      code: `<span class="k">data</span>[]<span class="p">.</span>id            <span class="p">:</span> <span class="t">int</span>    <span class="c">(e.g. 42)</span>
+<span class="k">data</span>[]<span class="p">.</span>name          <span class="p">:</span> <span class="t">string</span> <span class="c">(e.g. "alice")</span>
+<span class="k">data</span>[]<span class="p">.</span>roles[]       <span class="p">:</span> <span class="t">string</span> <span class="c">(e.g. "admin")</span>
+<span class="k">data</span>[]<span class="p">.</span>profile<span class="p">.</span>bio   <span class="p">:</span> <span class="t">string|null</span>
+<span class="k">meta</span><span class="p">.</span>total           <span class="p">:</span> <span class="t">int</span>    <span class="c">(e.g. 1247)</span>
+<span class="k">meta</span><span class="p">.</span>next_cursor     <span class="p">:</span> <span class="t">string|null</span>
+
+<span class="c"># 187 KB · data[]: 50 items</span>`,
+    },
+    shape: {
+      headline: 'TypeScript-like tree, more compact for deep data.',
+      when: 'Pick when you need to <strong>see structure at a glance</strong> — nested objects, arrays of records, optional branches.',
+      code: `{
+  <span class="k">data</span>: [{
+    <span class="k">id</span>: <span class="t">int</span>, <span class="k">name</span>: <span class="t">string</span>, <span class="k">roles</span>: <span class="t">string[]</span>,
+    <span class="k">profile</span>: { <span class="k">bio</span>: <span class="t">string|null</span> }
+  }] <span class="c">(50 items)</span>,
+  <span class="k">meta</span>: { <span class="k">total</span>: <span class="t">int</span>, <span class="k">next_cursor</span>: <span class="t">string|null</span> }
+}
+<span class="c"># 187 KB</span>`,
+    },
+    sample: {
+      headline: 'First item kept verbatim. Rest collapsed.',
+      when: 'Pick when an agent benefits from a <strong>realistic record</strong> — formatting, value ranges, naming conventions.',
+      code: `{
+  <span class="k">"data"</span>: [
+    {
+      <span class="k">"id"</span>: <span class="n">42</span>,
+      <span class="k">"name"</span>: <span class="s">"alice"</span>,
+      <span class="k">"roles"</span>: [<span class="s">"admin"</span>],
+      <span class="k">"created_at"</span>: <span class="s">"2026-05-09T…"</span>
+    },
+    <span class="s">"…49 more"</span>
+  ],
+  <span class="k">"meta"</span>: {
+    <span class="k">"total"</span>: <span class="n">1247</span>,
+    <span class="k">"next_cursor"</span>: <span class="s">"abc123"</span>
+  }
+}`,
+    },
+    json_schema: {
+      headline: 'Standard JSON Schema (draft 2020-12).',
+      when: 'Pick when feeding the schema <strong>back into a typed pipeline</strong> — validators, code generators, downstream MCP tools.',
+      code: `{
+  <span class="k">"$schema"</span>: <span class="s">"https://json-schema.org/draft/2020-12/schema"</span>,
+  <span class="k">"type"</span>: <span class="s">"object"</span>,
+  <span class="k">"properties"</span>: {
+    <span class="k">"data"</span>: {
+      <span class="k">"type"</span>: <span class="s">"array"</span>,
+      <span class="k">"items"</span>: {
+        <span class="k">"type"</span>: <span class="s">"object"</span>,
+        <span class="k">"properties"</span>: {
+          <span class="k">"id"</span>: { <span class="k">"type"</span>: <span class="s">"integer"</span> },
+          <span class="k">"name"</span>: { <span class="k">"type"</span>: <span class="s">"string"</span> },
+          <span class="k">"roles"</span>: { <span class="k">"type"</span>: <span class="s">"array"</span>, <span class="k">"items"</span>: { <span class="k">"type"</span>: <span class="s">"string"</span> } }
+        }
+      }
+    },
+    <span class="k">"meta"</span>: { <span class="k">"type"</span>: <span class="s">"object"</span> }
+  }
+}`,
+    },
+  };
+  const schemaPre = document.getElementById('schema-pre');
+  const schemaFmt = document.getElementById('schema-fmt');
+  const schemaHead = document.getElementById('schema-headline');
+  const schemaWhen = document.getElementById('schema-when');
+  const setSchema = (key) => {
+    const s = SCHEMAS[key];
+    if (!s) return;
+    schemaPre.style.opacity = '0';
+    schemaHead.style.opacity = '0';
+    schemaWhen.style.opacity = '0';
+    setTimeout(() => {
+      schemaPre.innerHTML = s.code;
+      schemaHead.textContent = s.headline;
+      schemaWhen.innerHTML = s.when;
+      schemaFmt.textContent = `format · ${key.replace('_', ' ')}`;
+      schemaPre.style.transition = 'opacity .3s ease';
+      schemaHead.style.transition = 'opacity .3s ease';
+      schemaWhen.style.transition = 'opacity .3s ease';
+      schemaPre.style.opacity = '1';
+      schemaHead.style.opacity = '1';
+      schemaWhen.style.opacity = '1';
+    }, 160);
+  };
+  document.querySelectorAll('#schema-tabs .schema-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#schema-tabs .schema-tab').forEach(b => b.setAttribute('aria-selected', 'false'));
+      btn.setAttribute('aria-selected', 'true');
+      setSchema(btn.dataset.tab);
+    });
+  });
+  setSchema('paths');
+
+  /* ---------- install tabs ---------- */
+  const k = (s) => `<span class="k">${s}</span>`;
+  const s = (s) => `<span class="s">${s}</span>`;
+  const c = (s) => `<span class="c">${s}</span>`;
+
+  const baseServer = `      ${k('"command"')}: ${s('"npx"')},
+      ${k('"args"')}: [${s('"-y"')}, ${s('"rest-magpie"')}]`;
+
+  const CONFIGS = {
+    'claude-desktop': {
+      file: '~/Library/Application Support/Claude/claude_desktop_config.json',
+      code: `{
+  ${k('"mcpServers"')}: {
+    ${k('"rest-magpie"')}: {
+${baseServer}
+    }
+  }
+}`,
+    },
+    'claude-code': {
+      file: '~/.claude/mcp.json   ' + c('// or: claude mcp add rest-magpie -- npx -y rest-magpie'),
+      code: `{
+  ${k('"mcpServers"')}: {
+    ${k('"rest-magpie"')}: {
+${baseServer}
+    }
+  }
+}`,
+    },
+    'vscode': {
+      file: '.vscode/mcp.json',
+      code: `{
+  ${k('"servers"')}: {
+    ${k('"rest-magpie"')}: {
+      ${k('"type"')}: ${s('"stdio"')},
+      ${k('"command"')}: ${s('"npx"')},
+      ${k('"args"')}: [${s('"-y"')}, ${s('"rest-magpie"')}]
+    }
+  }
+}`,
+    },
+    'cursor': {
+      file: '~/.cursor/mcp.json',
+      code: `{
+  ${k('"mcpServers"')}: {
+    ${k('"rest-magpie"')}: {
+${baseServer}
+    }
+  }
+}`,
+    },
+    'cline': {
+      file: 'cline_mcp_settings.json',
+      code: `{
+  ${k('"mcpServers"')}: {
+    ${k('"rest-magpie"')}: {
+      ${k('"command"')}: ${s('"npx"')},
+      ${k('"args"')}: [${s('"-y"')}, ${s('"rest-magpie"')}],
+      ${k('"disabled"')}: false,
+      ${k('"autoApprove"')}: []
+    }
+  }
+}`,
+    },
+    'windsurf': {
+      file: '~/.codeium/windsurf/mcp_config.json',
+      code: `{
+  ${k('"mcpServers"')}: {
+    ${k('"rest-magpie"')}: {
+${baseServer}
+    }
+  }
+}`,
+    },
+    'docker': {
+      file: 'claude_desktop_config.json   ' + c('// same-path bind mount + MAGPIE_FILES_ROOT'),
+      code: `{
+  ${k('"mcpServers"')}: {
+    ${k('"rest-magpie"')}: {
+      ${k('"command"')}: ${s('"docker"')},
+      ${k('"args"')}: [
+        ${s('"run"')}, ${s('"-i"')}, ${s('"--rm"')},
+        ${c('// agent paths under /home/me/data translate transparently')}
+        ${s('"-v"')}, ${s('"/home/me/data:/home/me/data"')},
+        ${s('"-e"')}, ${s('"MAGPIE_FILES_ROOT=/home/me/data"')},
+        ${s('"ghcr.io/ed-smartass/rest-magpie:latest"')}
+      ]
+    }
+  }
+}`,
+    },
+  };
+
+  const installCode = document.getElementById('install-code');
+  const installFile = document.getElementById('install-filename');
+  const STORAGE_KEY = 'rm-install-tab';
+
+  const setInstall = (clientKey) => {
+    const cfg = CONFIGS[clientKey];
+    if (!cfg) return;
+    installFile.innerHTML = cfg.file;
+    installCode.innerHTML = cfg.code;
+    try { localStorage.setItem(STORAGE_KEY, clientKey); } catch (e) {}
+  };
+
+  document.querySelectorAll('.install-sidebar .install-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.install-sidebar .install-tab').forEach(b => b.setAttribute('aria-selected', 'false'));
+      btn.setAttribute('aria-selected', 'true');
+      setInstall(btn.dataset.client);
+    });
+  });
+
+  // restore saved tab
+  let initial = 'claude-desktop';
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved && CONFIGS[saved]) initial = saved;
+  } catch (e) {}
+  document.querySelectorAll('.install-sidebar .install-tab').forEach(b => {
+    b.setAttribute('aria-selected', b.dataset.client === initial ? 'true' : 'false');
+  });
+  setInstall(initial);
+
+  /* ---------- copy button ---------- */
+  const copyBtn = document.getElementById('copy-config');
+  copyBtn.addEventListener('click', () => {
+    const txt = installCode.textContent;
+    navigator.clipboard.writeText(txt).then(() => {
+      copyBtn.classList.add('copied');
+      const span = copyBtn.querySelector('span');
+      const original = span.textContent;
+      span.textContent = 'Copied';
+      setTimeout(() => {
+        copyBtn.classList.remove('copied');
+        span.textContent = original;
+      }, 1500);
+    }).catch(() => {
+      copyBtn.querySelector('span').textContent = 'Press Ctrl+C';
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
