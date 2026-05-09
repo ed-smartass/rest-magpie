@@ -351,7 +351,7 @@ Whenever a JSON body is rendered into a schema, the server also infers a small a
 |---|---|
 | Array of objects | `length`, `[:5]`, `map({key1, key2})`, `sort_by(.created_at)[:10]` |
 | Array of scalars | `length`, `[:10]`, `unique`, `min`, `max` |
-| Object with array-valued field(s) | suggestions targeting each array field (e.g. `.data \| length`, `.data[:5]`) |
+| Object with array-valued field(s) | suggestions targeting each array field (e.g. <code>.data &#124; length</code>, `.data[:5]`) |
 | Plain object | `keys`, projection helpers (`to_entries` / `map(...)`) |
 
 Hints are strings of valid jq, but the server does **not** run them — the agent picks one or writes its own. Returned as `next_step_hints: string[]` on `http_request` and `http_inspect` responses. Empty array (or absent) for non-JSON bodies and unrecognised shapes.
@@ -361,7 +361,7 @@ Hints are strings of valid jq, but the server does **not** run them — the agen
 - **Storage:** in-memory `Map<cache_id, CacheEntry>`. No SQLite, no persistence.
 - **Key:** opaque random ULID-style `cache_id` (e.g. `req_01HXY7PZQ8...`). No deduplication; every `http_request` produces a new id even if URL/body are identical.
 - **TTL:** 600 seconds (env `MAGPIE_CACHE_TTL_SECONDS`). On insert, schedule a `setTimeout` to evict; on access, no sliding (TTL is from creation).
-- **Size:** bounded only by `MAX_RESPONSE_BYTES` per entry (default 50MB). No global cap in MVP — restart and 10-min eviction keep it bounded.
+- **Size:** bounded only by `MAGPIE_MAX_RESPONSE_BYTES` per entry (default 50MB). No global cap in MVP — restart and 10-min eviction keep it bounded.
 - **Cache miss:** `error.kind = "cache_miss"` for `http_read` / `http_inspect` against unknown or expired ids.
 
 `CacheEntry` shape:
@@ -451,7 +451,7 @@ Stable `kind` codes:
 | `network_error` | DNS, TCP refused, abort |
 | `tls_error` | cert validation failure (when not insecure) |
 | `redirect_loop` | exceeded max hops |
-| `body_too_large` | response exceeded MAX_RESPONSE_BYTES |
+| `body_too_large` | response exceeded `MAGPIE_MAX_RESPONSE_BYTES` |
 | `body_too_large_for_inline` | response cached but exceeded MAGPIE_INLINE_BODY_CAP for `body_mode: "inline"`; `error.detail.cache_id` is set so the agent can switch to `http_read` without refetching |
 | `unsupported_field` | request used a removed/renamed parameter (e.g. legacy `include_body`); `error.message` includes a migration hint |
 | `cache_miss` | cache_id unknown or expired |
@@ -555,7 +555,7 @@ This is the largest source of real-world confusion, so it's the spec's job to be
 | Field | npx | Docker | Remote MCP |
 |---|---|---|---|
 | `multipart.files[].path` | host (agent's) | container (use same-path bind mount) | server's filesystem (rarely useful — prefer `content_base64`) |
-| `multipart.files[].content_base64` | n/a | n/a | **recommended** for remote — agent supplies the bytes inline |
+| `multipart.files[].content_base64` | works (but `path` is simpler) | works (zero-volume Docker — no bind mount needed) | **recommended** for remote — agent supplies the bytes inline |
 | `download_to` | host (agent's) | container (use same-path bind mount) | server's filesystem |
 | `save_to` (in `http_read`) | host (agent's) | container (use same-path bind mount) | server's filesystem |
 

@@ -97,10 +97,13 @@ export const performHttp = async (
             if (isMethodChangingStatus && isUnsafe) {
                 currentMethod = 'GET'
                 currentBody = undefined
-                // Drop content-* headers that no longer make sense without a body.
+                // Drop ALL content-* headers since they describe an entity-body
+                // we are no longer transmitting (RFC 7231 §6.4 implication).
+                // Catches content-type, content-length, content-encoding,
+                // content-language, content-md5, etc.
                 const next: Record<string, string> = {}
                 for (const [k, v] of Object.entries(currentHeaders)) {
-                    if (k !== 'content-type' && k !== 'content-length') next[k] = v
+                    if (!k.startsWith('content-')) next[k] = v
                 }
                 currentHeaders = next
             }
@@ -146,8 +149,28 @@ export const performHttp = async (
 
         const writeWithBackpressure = async (chunk: Buffer): Promise<void> => {
             if (!stream.write(chunk) && !stream.destroyed) {
-                await new Promise<void>((res) => {
-                    stream.once('drain', () => res())
+                // Race 'drain' against 'error'/'close'. Without this, an
+                // error during backpressure (disk full, EPERM, EBADF) means
+                // 'drain' never fires and the await hangs forever.
+                await new Promise<void>((res, rej) => {
+                    const onDrain = () => {
+                        stream.removeListener('error', onError)
+                        stream.removeListener('close', onClose)
+                        res()
+                    }
+                    const onError = (e: Error) => {
+                        stream.removeListener('drain', onDrain)
+                        stream.removeListener('close', onClose)
+                        rej(e)
+                    }
+                    const onClose = () => {
+                        stream.removeListener('drain', onDrain)
+                        stream.removeListener('error', onError)
+                        rej(streamError ?? new Error('stream closed before drain'))
+                    }
+                    stream.once('drain', onDrain)
+                    stream.once('error', onError)
+                    stream.once('close', onClose)
                 })
             }
         }

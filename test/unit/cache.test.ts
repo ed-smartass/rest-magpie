@@ -22,7 +22,7 @@ const sampleEntry = (cache_id: string): CacheEntry => ({
             head_preview_threshold_bytes: 65536,
             head_preview_items: 5,
             head_preview_string_chars: 200,
-            inline_cap_bytes: 262144,
+            inline_body_cap_bytes: 262144,
         },
         redirect_chain: [],
     },

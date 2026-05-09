@@ -53,8 +53,15 @@ export const httpRequestTool = async (
             // content_base64 inline files have no path to canonicalise; skip
             // the FILES_ROOT check (this is the documented behaviour for
             // remote-MCP scenarios where path semantics don't make sense).
-            if (!('path' in file)) continue
-            const err = ensureUnderRoot(file.path, filesRoot, 'multipart.files.' + key + '.path')
+            // Use a typeof check rather than `'path' in file` so a
+            // schema-bypassing payload like `{content_base64, path: null}`
+            // doesn't reach realpathSync(null) downstream.
+            if (typeof (file as { path?: unknown }).path !== 'string') continue
+            const err = ensureUnderRoot(
+                (file as { path: string }).path,
+                filesRoot,
+                'multipart.files.' + key + '.path',
+            )
             if (err) return err
         }
     }
@@ -90,12 +97,17 @@ export const httpRequestTool = async (
 
     const requestedMode: BodyMode = params.body_mode ?? 'auto'
     const resolution = resolveBodyMode(requestedMode, runResult.body_kind, runResult.bodyBytes)
-    if (!resolution.ok) return resolution.error
 
-    const body_inclusion: BodyInclusion = buildInclusion(
-        resolution.resolved_mode,
-        resolution.reason,
-    )
+    // Cache the entry BEFORE branching on the resolution result. The
+    // `body_too_large_for_inline` error tells the agent to recover via
+    // `http_read` with the surfaced `cache_id`, so the entry must be
+    // present in the cache at the moment that error is returned.
+    const resolvedForMeta: ResolvedBodyMode = resolution.ok ? resolution.resolved_mode : 'schema'
+    const reasonForMeta: string | undefined = resolution.ok
+        ? resolution.reason
+        : 'body cached; inline cap exceeded — fetch via http_read with cache_id'
+
+    const body_inclusion: BodyInclusion = buildInclusion(resolvedForMeta, reasonForMeta)
 
     const meta: ResponseMeta = {
         url: runResult.finalUrl,
@@ -119,6 +131,16 @@ export const httpRequestTool = async (
         meta,
     }
     cache.put(entry)
+
+    if (!resolution.ok) {
+        const inner = resolution.error.error
+        return {
+            error: {
+                ...inner,
+                detail: { ...(inner.detail ?? {}), cache_id },
+            },
+        }
+    }
 
     const cfg = getConfig()
     const result: HttpRequestResult = {
@@ -195,7 +217,7 @@ const resolveBodyMode = (requested: BodyMode, kind: BodyKind, bytes: number): Re
                         ' bytes; refusing to inline (cap ' +
                         cfg.inlineBodyCapBytes +
                         '). The body is cached — use http_read with the returned cache_id to extract fields via a jq mask.',
-                    { body_bytes: bytes, inline_cap_bytes: cfg.inlineBodyCapBytes },
+                    { body_bytes: bytes, inline_body_cap_bytes: cfg.inlineBodyCapBytes },
                 ),
             }
         }
@@ -243,7 +265,7 @@ const buildInclusion = (resolved: ResolvedBodyMode, reason?: string): BodyInclus
         head_preview_threshold_bytes: cfg.headPreviewThresholdBytes,
         head_preview_items: cfg.headPreviewItems,
         head_preview_string_chars: cfg.headPreviewStringChars,
-        inline_cap_bytes: cfg.inlineBodyCapBytes,
+        inline_body_cap_bytes: cfg.inlineBodyCapBytes,
         ...(reason ? { reason } : {}),
     }
 }

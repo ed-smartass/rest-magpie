@@ -52,15 +52,23 @@ type PreparedFile =
 const isInlineFile = (f: MultipartFile): f is Extract<MultipartFile, { content_base64: string }> =>
     'content_base64' in f
 
-const decodeBase64 = (s: string, where: string, capBytes: number): Buffer => {
-    let buf: Buffer
-    try {
-        buf = Buffer.from(s, 'base64')
-    } catch {
+// `Buffer.from(s, 'base64')` does NOT throw on malformed input — it silently
+// strips invalid characters and decodes the rest. To give callers a real
+// "you sent garbage" signal we validate the alphabet + length up front.
+const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/
+
+const decodeBase64 = (s: unknown, where: string, capBytes: number): Buffer => {
+    if (typeof s !== 'string') {
+        const e = new Error('invalid_input: ' + where + ' must be a string')
+        ;(e as { kind?: string }).kind = 'invalid_input'
+        throw e
+    }
+    if (s.length % 4 !== 0 || !BASE64_RE.test(s)) {
         const e = new Error('invalid_input: ' + where + ' is not valid base64')
         ;(e as { kind?: string }).kind = 'invalid_input'
         throw e
     }
+    const buf = Buffer.from(s, 'base64')
     if (buf.length > capBytes) {
         const e = new Error(
             'invalid_input: ' +

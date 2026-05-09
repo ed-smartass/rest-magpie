@@ -152,6 +152,7 @@ const HTTP_REQUEST_SCHEMA = {
                                     content_type: { type: 'string' },
                                 },
                                 required: ['path'],
+                                additionalProperties: false,
                             },
                             {
                                 type: 'object',
@@ -161,6 +162,7 @@ const HTTP_REQUEST_SCHEMA = {
                                     content_type: { type: 'string' },
                                 },
                                 required: ['content_base64'],
+                                additionalProperties: false,
                             },
                         ],
                     },

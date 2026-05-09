@@ -63,7 +63,7 @@ export interface BodyInclusion {
     head_preview_threshold_bytes: number
     head_preview_items: number
     head_preview_string_chars: number
-    inline_cap_bytes: number
+    inline_body_cap_bytes: number
     reason?: string
 }
 
