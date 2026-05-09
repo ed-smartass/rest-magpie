@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.2.0 — 2026-05-10
+
+Agent-UX bundle. Breaks the public API on one parameter (`include_body` → `body_mode`). Zero migration cost in practice (no installed v0.1.x users this early), so we took the rename window before usage solidifies. Adds three orthogonal capabilities (`head` mode preview, `next_step_hints`, `server_info` debug tool) plus the `content_base64` multipart payload mode that closes remote-MCP file asymmetry. Pre-bundle hardening pass closes 16 issues from the Copilot audit (header injection, cache_id randomness, symlink-resolved path validation, redirect method downgrade, more).
+
+### Breaking
+- **`include_body` is removed.** Use `body_mode: "auto" | "schema" | "head" | "inline"` (default `"auto"`). Sending the legacy field returns `error.kind = "unsupported_field"` with a migration hint. Mapping: `true → "inline"`, `false → "schema"`, `"auto" → "auto"`.
+- **`meta.body_included: boolean` is replaced by `meta.body_inclusion`** with `resolved_mode`, `inline_threshold_bytes`, `head_preview_threshold_bytes`, `head_preview_items`, `head_preview_string_chars`, `inline_cap_bytes`, optional `reason`. Lets agents introspect what `auto` actually picked.
+
+### Added
+- **`body_mode: "head"`** — schema + `body_preview` with arrays/strings truncated and sibling `_truncated` markers. `auto` upgrades through head between `MAGPIE_INLINE_THRESHOLD_BYTES` and `MAGPIE_HEAD_PREVIEW_THRESHOLD`.
+- **`next_step_hints`** — advisory jq-mask suggestions inferred from top-level shape (per spec §5.6). Server proposes; agent picks; server doesn't run them.
+- **`server_info` tool** — new 4th MCP tool. No params. Returns `version`, `runtime` (`npx` / `docker` / `unknown`), `cwd`, `files_root`, and a 15-field `effective_limits` object. Use it when a path is rejected unexpectedly or to confirm runtime.
+- **`multipart.files[].content_base64`** — alternative file payload mode. The bytes travel inline in the JSON-RPC frame, capped by `MAGPIE_MAX_INLINE_FILE_BYTES` (default 10 MB). Recommended for remote-MCP scenarios where path semantics differ between agent and server. `MAGPIE_FILES_ROOT` does not apply (no path).
+- **New error kinds** — `body_too_large_for_inline` (with `cache_id` in `detail` so agent can pivot to `http_read`), `unsupported_field`.
+- **New env vars** — `MAGPIE_HEAD_PREVIEW_THRESHOLD` (64 KB), `MAGPIE_HEAD_PREVIEW_ITEMS` (5), `MAGPIE_HEAD_PREVIEW_STRING` (200), `MAGPIE_INLINE_BODY_CAP` (256 KB), `MAGPIE_MAX_INLINE_FILE_BYTES` (10 MB). `MAGPIE_AUTO_INCLUDE_BODY_BYTES` is **renamed** to `MAGPIE_INLINE_THRESHOLD_BYTES` (same default 8192).
+
+### Hardening (pre-bundle Copilot audit pass)
+- **Multipart header injection** — CR/LF/NUL in user-controlled header positions (field name, filename, content_type) is now rejected with `invalid_input`; backslash and double-quote in name/filename are RFC 7578 escaped. Validation eager (fails fast on `buildMultipart` call).
+- **`cache_id`** — now `crypto.randomBytes(16)` hex (128 bits) instead of `Math.random()`.
+- **Symlink escape** — `ensureUnderRoot` resolves through `realpathSync` first (lexical fallback for non-existent paths) so symlinks can't escape `MAGPIE_FILES_ROOT`.
+- **`isUnderRoot` root='/'** — prior `rr + sep` produced `'//'` and rejected every absolute path; short-circuit added.
+- **Redirect 301/302/303** — downgrade unsafe methods to GET, drop body and content-* headers (RFC 7231 §6.4). 307/308 preserve.
+- **Header case-sensitivity** — incoming headers normalised to lowercase to avoid duplicate Content-Type when caller passes mixed case.
+- **download_to backpressure** — `stream.write` return value honoured (await `'drain'`); error listener attached.
+- **download_to partial cleanup** — best-effort `unlink` of partial file on `body_too_large` or stream error.
+- **jq timeout detection** — `JqTimeoutError` class instead of substring sentinel match.
+- **jq output_mode='first' empty output** — returns `null` (not `undefined`).
+- **`renderSchema` exhaustiveness** — switch gains `default` with `never`-typed exhaustiveness guard.
+- **`schema/paths` root depth overflow** — uses `(root).???` instead of stray-leading-dot `.???`.
+- **`http_read` binary cast guard** — surfaces a clear error instead of crashing when the original request used `download_to` (body=null).
+- **`pathEnv` whitespace** — trims before `path.resolve`.
+- **Version drift** — server version now injected at build time from `package.json` via tsup `define`, not a hardcoded literal.
+
 ## 0.1.2 — 2026-05-10
 
 Agent-UX patch release. No spec amendment, no public API changes — just rewrites the strings agents actually read and enriches the path-rejection error envelope.
