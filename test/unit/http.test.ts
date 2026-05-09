@@ -110,6 +110,12 @@ describe('performHttp body input', () => {
             ),
         ).rejects.toThrow(/invalid_input/)
     })
+
+    it('rejects body_raw without content_type', async () => {
+        await expect(
+            performHttp({ method: 'POST', url: 'https://api.test/raw', body_raw: 'hello' }, {}),
+        ).rejects.toThrow(/invalid_input/)
+    })
 })
 
 describe('performHttp multipart', () => {

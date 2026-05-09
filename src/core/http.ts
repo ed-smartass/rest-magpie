@@ -1,3 +1,4 @@
+import type { Readable } from 'node:stream'
 import { Agent, type Dispatcher } from 'undici'
 import { getConfig } from '../config.js'
 import type { BodyKind, HttpRequestParams } from '../types.js'
@@ -54,6 +55,9 @@ export const performHttp = async (
             body,
             redirect: 'manual',
             signal: AbortSignal.timeout(params.timeout_ms ?? cfg.defaultTimeoutMs),
+        }
+        if (body !== undefined && typeof body !== 'string' && !Buffer.isBuffer(body)) {
+            init.duplex = 'half'
         }
         if (dispatcher) init.dispatcher = dispatcher
 
@@ -206,7 +210,7 @@ const flattenHeaders = (h: Headers): Record<string, string> => {
 }
 
 interface ResolvedBody {
-    body: string | Buffer | undefined
+    body: string | Buffer | Readable | undefined
     contentType?: string
 }
 
@@ -226,6 +230,11 @@ const resolveBody = (p: HttpRequestParams): ResolvedBody => {
         return { body: JSON.stringify(p.body), contentType: 'application/json' }
     }
     if (p.body_raw !== undefined) {
+        if (p.content_type === undefined) {
+            const e = new Error('invalid_input: body_raw requires content_type')
+            ;(e as { kind?: string }).kind = 'invalid_input'
+            throw e
+        }
         return { body: p.body_raw, contentType: undefined }
     }
     if (p.multipart !== undefined) {
