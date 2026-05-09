@@ -21,11 +21,9 @@
 
 `rest-magpie` is an MCP server that wraps arbitrary REST API calls so your agent **first sees a compact schema**, then pulls **only what it asked for** through a jq mask. Big responses stay out of context until you actually need a slice.
 
-```
-fetch  → cache  → schema (default)  → jq mask  → field value
-                  ↑                  ↑
-              "what's here?"     "give me .data[].id"
-```
+<p align="center">
+  <a href="https://ed-smartass.github.io/rest-magpie/"><strong>→ Live demo</strong></a>
+</p>
 
 ## TL;DR
 
