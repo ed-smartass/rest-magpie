@@ -29,10 +29,9 @@ export const performHttp = async (
 
     const headers: Record<string, string> = { ...(params.headers ?? {}) }
 
-    // Body handled in Task 14 (object/string), Task 15 (multipart). For now: only body_raw.
-    const body = params.body_raw
-    if (body !== undefined && !headers['content-type'] && params.content_type) {
-        headers['content-type'] = params.content_type
+    const { body, contentType: bodyCt } = resolveBody(params)
+    if (body !== undefined && !headers['content-type']) {
+        headers['content-type'] = params.content_type ?? bodyCt ?? 'application/octet-stream'
     }
 
     const controller = new AbortController()
@@ -112,4 +111,31 @@ const flattenHeaders = (h: Headers): Record<string, string> => {
         out[k.toLowerCase()] = v
     })
     return out
+}
+
+interface ResolvedBody {
+    body: string | Buffer | undefined
+    contentType?: string
+}
+
+const resolveBody = (p: HttpRequestParams): ResolvedBody => {
+    const set = (['body', 'body_raw', 'multipart'] as const).filter(
+        (k) => (p as Record<string, unknown>)[k] !== undefined,
+    )
+    if (set.length > 1) {
+        const e = new Error('invalid_input: only one of body | body_raw | multipart allowed')
+        ;(e as { kind?: string }).kind = 'invalid_input'
+        throw e
+    }
+    if (p.body !== undefined) {
+        if (typeof p.body === 'string') {
+            return { body: p.body, contentType: 'text/plain; charset=utf-8' }
+        }
+        return { body: JSON.stringify(p.body), contentType: 'application/json' }
+    }
+    if (p.body_raw !== undefined) {
+        return { body: p.body_raw, contentType: undefined }
+    }
+    // multipart in Task 15
+    return { body: undefined }
 }

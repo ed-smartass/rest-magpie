@@ -69,3 +69,42 @@ describe('performHttp', () => {
         )
     })
 })
+
+describe('performHttp body input', () => {
+    it('encodes object body as application/json', async () => {
+        let received: { body: unknown; ct: string | null } = { body: undefined, ct: null }
+        server.use(
+            http.post('https://api.test/echo', async ({ request }) => {
+                received = { body: await request.json(), ct: request.headers.get('content-type') }
+                return HttpResponse.json({ ok: true })
+            }),
+        )
+        await performHttp({ method: 'POST', url: 'https://api.test/echo', body: { x: 1 } }, {})
+        expect(received.body).toEqual({ x: 1 })
+        expect(received.ct).toContain('application/json')
+    })
+
+    it('sends string body as text/plain when no content_type', async () => {
+        let body: string | undefined
+        let ct: string | null = null
+        server.use(
+            http.post('https://api.test/raw', async ({ request }) => {
+                body = await request.text()
+                ct = request.headers.get('content-type')
+                return HttpResponse.json({})
+            }),
+        )
+        await performHttp({ method: 'POST', url: 'https://api.test/raw', body: 'hello' }, {})
+        expect(body).toBe('hello')
+        expect(ct).toContain('text/plain')
+    })
+
+    it('rejects when both body and body_raw set', async () => {
+        await expect(
+            performHttp(
+                { method: 'POST', url: 'https://api.test/x', body: { a: 1 }, body_raw: 'abc' },
+                {},
+            ),
+        ).rejects.toThrow(/invalid_input/)
+    })
+})
