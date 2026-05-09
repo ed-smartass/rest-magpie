@@ -10,18 +10,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ed-smartass/rest-magpie/actions/workflows/ci.yml">
-    <img src="https://github.com/ed-smartass/rest-magpie/actions/workflows/ci.yml/badge.svg" alt="CI">
-  </a>
-  <a href="https://www.npmjs.com/package/rest-magpie">
-    <img src="https://img.shields.io/npm/v/rest-magpie?color=cb3837" alt="npm">
-  </a>
-  <a href="LICENSE">
-    <img src="https://img.shields.io/github/license/ed-smartass/rest-magpie" alt="MIT">
-  </a>
-  <a href="https://modelcontextprotocol.io">
-    <img src="https://img.shields.io/badge/MCP-compatible-6f42c1" alt="MCP">
-  </a>
+  <a href="https://github.com/ed-smartass/rest-magpie/actions/workflows/ci.yml"><img src="https://github.com/ed-smartass/rest-magpie/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://www.npmjs.com/package/rest-magpie"><img src="https://img.shields.io/npm/v/rest-magpie?color=cb3837" alt="npm"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/ed-smartass/rest-magpie" alt="MIT"></a>
+  <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-compatible-6f42c1" alt="MCP"></a>
 </p>
 
 ---
