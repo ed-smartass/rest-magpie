@@ -6,6 +6,9 @@ coverage/
 .env
 .env.local
 
+# Local Claude Code config (subagents, hooks, permissions)
+.claude/
+
 # Build-time AI agent artifacts (kept local during development)
 AGENTS.md
 docs/plans/
