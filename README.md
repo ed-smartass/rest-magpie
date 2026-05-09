@@ -44,11 +44,6 @@ fetch  → cache  → schema (default)  → jq mask  → field value
 
 ---
 
-<!-- Demo gif — placeholder, replace with docs/images/demo.gif -->
-<p align="center">
-  <img src="docs/images/demo.gif" alt="rest-magpie demo" width="640">
-</p>
-
 ## Install
 
 **npm (recommended):**
