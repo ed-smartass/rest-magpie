@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.2 — 2026-05-10
+
+Agent-UX patch release. No spec amendment, no public API changes — just rewrites the strings agents actually read and enriches the path-rejection error envelope.
+
+### Changed
+- **Tool descriptions rewritten** for `http_request`, `http_read`, `http_inspect`. Now lead with the recommended default flow (http_request → schema + cache_id → http_read with a jq mask) instead of describing the parameter surface. `http_request` adds explicit cost framing on `include_body: true` (200KB JSON ≈ 12K tokens), a chunked-multipart compatibility note, and a 2-example mini-cookbook (unknown-endpoint exploration + GitHub-issues sort/slice). Triggered by real agent feedback where the boolean form of `include_body` consistently biased agents toward `true`.
+- **Path-rejection error envelope is richer.** `error.detail` on `ensureUnderRoot` failures now carries `field`, `value` (original input), `resolved` (`path.resolve(value)` so traversal attempts surface), `root`, `runtime` (`'docker'` or `'host'`), and `hint` (runtime-specific guidance). Lets agents (and humans) self-correct on rejected paths without guessing.
+
+### Added
+- **README "Run modes & file paths"** section. Decision table for picking npx / Docker / remote MCP, an explicit per-runtime matrix for where `multipart.files[].path` / `download_to` / `save_to` resolve, and a note on multipart chunked-transfer compatibility (most servers fine; legacy proxies may reject).
+- **README "Default flow" callout** above the Tools table, mirroring the rewritten tool descriptions to reduce drift between in-tool docs and README.
+
 ## 0.1.1 — 2026-05-10
 
 ### Fixed
