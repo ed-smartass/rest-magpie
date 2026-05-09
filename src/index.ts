@@ -62,13 +62,34 @@ export const createServer = () => {
 }
 
 const HTTP_REQUEST_DESC =
-    'Perform an HTTP request, cache the response, and return a schema of the body. ' +
-    'By default, only the schema is returned (small bodies <=8KB are inlined). ' +
-    'Use http_read to extract fields with a jq mask.'
+    'Perform an HTTP request and return a compact schema of the response, not the full body.\n\n' +
+    'Default flow (use this for any non-trivial response): ' +
+    '(1) call http_request to get { schema, cache_id }; ' +
+    '(2) call http_read with cache_id and a jq mask to extract only the field(s) you need. ' +
+    'This keeps your context small even on multi-MB responses.\n\n' +
+    'Set include_body: true ONLY when the body is known-small (<8KB) AND you need every field. ' +
+    'On a 200KB JSON, true puts ~12K tokens into your context for data you will never use; ' +
+    'on a multi-MB response it pushes you toward context overflow. ' +
+    'When in doubt, leave include_body unset (auto: schema-only when >8KB, inline below).\n\n' +
+    'Multipart uploads stream files via chunked transfer encoding (no Content-Length). ' +
+    'Most servers accept this; some legacy proxies / primitive test servers reject it.\n\n' +
+    'Cookbook:\n' +
+    '  • Explore an unknown endpoint:\n' +
+    '      http_request {method: "GET", url}  →  schema shows what is there\n' +
+    '      http_read {cache_id, mask: ".data | map({id, name})"}\n' +
+    '  • Top 10 GitHub issues by comment count:\n' +
+    '      http_request {method: "GET", url: "https://api.github.com/repos/OWNER/REPO/issues"}\n' +
+    '      http_read {cache_id, mask: "sort_by(-.comments)[:10] | .[] | {id, title, comments}"}'
+
 const HTTP_READ_DESC =
-    'Read a cached response body. Optionally apply a jq mask. Required for binary bodies (use save_to).'
+    'Read a cached response body, optionally filtered through a jq mask. ' +
+    'Tip: lead with `length` (e.g. mask: ".data | length") to learn the size before listing items. ' +
+    'Required for binary bodies — pass save_to to stream the body to disk; binaries are never inlined into your context.'
+
 const HTTP_INSPECT_DESC =
-    'Re-render the cached response schema in a different format without re-fetching.'
+    'Re-render the cached response schema in a different format (paths | shape | sample | json_schema) ' +
+    'without making a second HTTP call. ' +
+    'Try `shape` for nested structures, `sample` to see one realistic record, or `json_schema` for downstream typed pipelines.'
 
 // JSON Schemas — order of properties matches the spec §4 canonical order.
 const HTTP_REQUEST_SCHEMA = {
