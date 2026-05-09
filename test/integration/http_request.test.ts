@@ -1,0 +1,92 @@
+import { http, HttpResponse } from 'msw'
+import { setupServer } from 'msw/node'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { resetConfigCache } from '../../src/config.js'
+import { Cache } from '../../src/core/cache.js'
+import { isError } from '../../src/core/errors.js'
+import { httpRequestTool } from '../../src/tools/http_request.js'
+
+const server = setupServer()
+beforeAll(() => server.listen())
+afterEach(() => {
+    server.resetHandlers()
+    resetConfigCache()
+})
+afterAll(() => server.close())
+
+describe('http_request tool', () => {
+    it('returns cache_id, status, meta, schema for JSON', async () => {
+        server.use(http.get('https://api.test/u', () => HttpResponse.json({ data: [{ id: 1 }] })))
+        const cache = new Cache(60)
+        const r = await httpRequestTool({ method: 'GET', url: 'https://api.test/u' }, cache)
+        expect(isError(r)).toBe(false)
+        if (isError(r)) return
+        expect(r.status).toBe(200)
+        expect(r.cache_id).toMatch(/^req_/)
+        expect(typeof r.schema).toBe('string')
+        expect(r.meta.body_kind).toBe('json')
+        expect(r.meta.body_included).toBe(true)
+        expect(r.body).toEqual({ data: [{ id: 1 }] })
+    })
+
+    it('does not inline body when over auto threshold', async () => {
+        const key = 'MAGPIE_AUTO_INCLUDE_BODY_BYTES'
+        process.env[key] = '10'
+        resetConfigCache()
+        server.use(
+            http.get('https://api.test/big', () => HttpResponse.json({ a: 'x'.repeat(100) })),
+        )
+        const cache = new Cache(60)
+        const r = await httpRequestTool({ method: 'GET', url: 'https://api.test/big' }, cache)
+        if (isError(r)) throw new Error('unexpected error')
+        expect(r.meta.body_included).toBe(false)
+        expect(r.body).toBeUndefined()
+        delete process.env[key]
+    })
+
+    it('forces include_body=true regardless of size (json)', async () => {
+        server.use(http.get('https://api.test/x', () => HttpResponse.json({ a: 1 })))
+        const cache = new Cache(60)
+        const r = await httpRequestTool(
+            { method: 'GET', url: 'https://api.test/x', include_body: true },
+            cache,
+        )
+        if (isError(r)) throw new Error('unexpected error')
+        expect(r.body).toEqual({ a: 1 })
+    })
+
+    it('never inlines binary, even with include_body=true', async () => {
+        server.use(
+            http.get(
+                'https://api.test/b',
+                () =>
+                    new Response(new Uint8Array([1, 2, 3]), {
+                        headers: { 'content-type': 'image/png' },
+                    }),
+            ),
+        )
+        const cache = new Cache(60)
+        const r = await httpRequestTool(
+            { method: 'GET', url: 'https://api.test/b', include_body: true },
+            cache,
+        )
+        if (isError(r)) throw new Error('unexpected error')
+        expect(r.meta.body_included).toBe(false)
+        expect(r.body).toBeUndefined()
+    })
+
+    it('rejects download_to + include_body=true', async () => {
+        const cache = new Cache(60)
+        const r = await httpRequestTool(
+            {
+                method: 'GET',
+                url: 'https://api.test/x',
+                download_to: '/tmp/y',
+                include_body: true,
+            },
+            cache,
+        )
+        expect(isError(r)).toBe(true)
+        if (isError(r)) expect(r.error.kind).toBe('invalid_input')
+    })
+})
