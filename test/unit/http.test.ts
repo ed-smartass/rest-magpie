@@ -191,3 +191,28 @@ describe('performHttp redirects and limits', () => {
         resetConfigCache()
     })
 })
+
+describe('performHttp download_to', () => {
+    it('streams body to disk and skips in-memory buffering', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'magpie-dl-'))
+        const target = join(dir, 'out.bin')
+        server.use(
+            http.get(
+                'https://api.test/file',
+                () =>
+                    new Response('hello world', {
+                        headers: { 'content-type': 'application/octet-stream' },
+                    }),
+            ),
+        )
+        const r = await performHttp(
+            { method: 'GET', url: 'https://api.test/file', download_to: target },
+            {},
+        )
+        expect(r.body_kind).toBe('binary')
+        expect(r.parsedBody).toBeNull()
+        expect((r as { downloadPath?: string }).downloadPath).toBe(target)
+        const fs = await import('node:fs')
+        expect(fs.readFileSync(target, 'utf8')).toBe('hello world')
+    })
+})

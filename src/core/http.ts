@@ -14,6 +14,8 @@ export interface HttpRunResult {
     finalUrl: string
     redirectChain: string[]
     durationMs: number
+    downloadPath?: string
+    sha256?: string
 }
 
 export interface HttpOptions {
@@ -86,8 +88,51 @@ export const performHttp = async (
 
     // Stream the body and enforce MAGPIE_MAX_RESPONSE_BYTES early.
     const reader = resp.body?.getReader()
-    const chunks: Uint8Array[] = []
     let total = 0
+
+    if (params.download_to) {
+        const fs = await import('node:fs')
+        const { createHash } = await import('node:crypto')
+        const stream = fs.createWriteStream(params.download_to)
+        const hasher = createHash('sha256')
+        if (reader) {
+            for (;;) {
+                const { value, done } = await reader.read()
+                if (done) break
+                if (value) {
+                    total += value.length
+                    if (total > cfg.maxResponseBytes) {
+                        reader.cancel().catch(() => {})
+                        stream.destroy()
+                        const e = new Error('body_too_large')
+                        ;(e as { kind?: string }).kind = 'body_too_large'
+                        throw e
+                    }
+                    stream.write(Buffer.from(value))
+                    hasher.update(value)
+                }
+            }
+        }
+        await new Promise<void>((res, rej) =>
+            stream.end((err: Error | null | undefined) => (err ? rej(err) : res())),
+        )
+        const ct = resp.headers.get('content-type') ?? ''
+        return {
+            status: resp.status,
+            headers: flattenHeaders(resp.headers),
+            body_kind: 'binary',
+            parsedBody: null,
+            contentType: ct,
+            bodyBytes: total,
+            finalUrl: currentUrl,
+            redirectChain,
+            durationMs: Date.now() - start,
+            downloadPath: params.download_to,
+            sha256: hasher.digest('hex'),
+        }
+    }
+
+    const chunks: Uint8Array[] = []
     if (reader) {
         for (;;) {
             const { value, done } = await reader.read()
