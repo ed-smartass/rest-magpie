@@ -57,8 +57,11 @@ describe('renderPaths', () => {
                 }
             }
         } finally {
-            if (original === undefined) delete process.env.MAGPIE_SCHEMA_MAX_DEPTH
-            else process.env.MAGPIE_SCHEMA_MAX_DEPTH = original
+            if (original === undefined) {
+                Reflect.deleteProperty(process.env, 'MAGPIE_SCHEMA_MAX_DEPTH')
+            } else {
+                process.env.MAGPIE_SCHEMA_MAX_DEPTH = original
+            }
             resetConfigCache()
         }
     })
