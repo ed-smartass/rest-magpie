@@ -16,7 +16,14 @@ const sampleEntry = (cache_id: string): CacheEntry => ({
         body_bytes: 18,
         content_type: 'application/json',
         body_kind: 'json',
-        body_included: true,
+        body_inclusion: {
+            resolved_mode: 'inline',
+            inline_threshold_bytes: 8192,
+            head_preview_threshold_bytes: 65536,
+            head_preview_items: 5,
+            head_preview_string_chars: 200,
+            inline_cap_bytes: 262144,
+        },
         redirect_chain: [],
     },
 })

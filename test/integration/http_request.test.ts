@@ -25,13 +25,13 @@ describe('http_request tool', () => {
         expect(r.cache_id).toMatch(/^req_/)
         expect(typeof r.schema).toBe('string')
         expect(r.meta.body_kind).toBe('json')
-        expect(r.meta.body_included).toBe(true)
+        expect(r.meta.body_inclusion.resolved_mode).toBe('inline')
         expect(r.body).toEqual({ data: [{ id: 1 }] })
     })
 
-    it('does not inline body when over auto threshold', async () => {
-        const key = 'MAGPIE_AUTO_INCLUDE_BODY_BYTES'
-        process.env[key] = '10'
+    it('auto resolves to head when body is between thresholds', async () => {
+        const k1 = 'MAGPIE_INLINE_THRESHOLD_BYTES'
+        process.env[k1] = '10'
         resetConfigCache()
         server.use(
             http.get('https://api.test/big', () => HttpResponse.json({ a: 'x'.repeat(100) })),
@@ -39,23 +39,23 @@ describe('http_request tool', () => {
         const cache = new Cache(60)
         const r = await httpRequestTool({ method: 'GET', url: 'https://api.test/big' }, cache)
         if (isError(r)) throw new Error('unexpected error')
-        expect(r.meta.body_included).toBe(false)
+        expect(r.meta.body_inclusion.resolved_mode).toBe('head')
         expect(r.body).toBeUndefined()
-        delete process.env[key]
+        delete process.env[k1]
     })
 
-    it('forces include_body=true regardless of size (json)', async () => {
+    it('forces body_mode=inline regardless of size (json)', async () => {
         server.use(http.get('https://api.test/x', () => HttpResponse.json({ a: 1 })))
         const cache = new Cache(60)
         const r = await httpRequestTool(
-            { method: 'GET', url: 'https://api.test/x', include_body: true },
+            { method: 'GET', url: 'https://api.test/x', body_mode: 'inline' },
             cache,
         )
         if (isError(r)) throw new Error('unexpected error')
         expect(r.body).toEqual({ a: 1 })
     })
 
-    it('never inlines binary, even with include_body=true', async () => {
+    it('rejects body_mode=inline on binary', async () => {
         server.use(
             http.get(
                 'https://api.test/b',
@@ -67,27 +67,69 @@ describe('http_request tool', () => {
         )
         const cache = new Cache(60)
         const r = await httpRequestTool(
-            { method: 'GET', url: 'https://api.test/b', include_body: true },
+            { method: 'GET', url: 'https://api.test/b', body_mode: 'inline' },
             cache,
         )
+        expect(isError(r)).toBe(true)
+        if (isError(r)) expect(r.error.kind).toBe('invalid_input')
+    })
+
+    it('auto on binary resolves to schema and never inlines', async () => {
+        server.use(
+            http.get(
+                'https://api.test/b',
+                () =>
+                    new Response(new Uint8Array([1, 2, 3]), {
+                        headers: { 'content-type': 'image/png' },
+                    }),
+            ),
+        )
+        const cache = new Cache(60)
+        const r = await httpRequestTool({ method: 'GET', url: 'https://api.test/b' }, cache)
         if (isError(r)) throw new Error('unexpected error')
-        expect(r.meta.body_included).toBe(false)
+        expect(r.meta.body_inclusion.resolved_mode).toBe('schema')
         expect(r.body).toBeUndefined()
     })
 
-    it('rejects download_to + include_body=true', async () => {
+    it('rejects download_to + body_mode=inline', async () => {
         const cache = new Cache(60)
         const r = await httpRequestTool(
             {
                 method: 'GET',
                 url: 'https://api.test/x',
                 download_to: '/tmp/y',
-                include_body: true,
+                body_mode: 'inline',
             },
             cache,
         )
         expect(isError(r)).toBe(true)
         if (isError(r)) expect(r.error.kind).toBe('invalid_input')
+    })
+
+    it('rejects legacy include_body field with unsupported_field', async () => {
+        const cache = new Cache(60)
+        // biome-ignore lint/suspicious/noExplicitAny: simulating legacy v0.1.x caller
+        const params: any = { method: 'GET', url: 'https://api.test/x', include_body: true }
+        const r = await httpRequestTool(params, cache)
+        expect(isError(r)).toBe(true)
+        if (isError(r)) {
+            expect(r.error.kind).toBe('unsupported_field')
+            expect(r.error.message).toContain('body_mode')
+        }
+    })
+
+    it('errors body_too_large_for_inline when explicit inline > cap', async () => {
+        process.env.MAGPIE_INLINE_BODY_CAP = '10'
+        resetConfigCache()
+        server.use(http.get('https://api.test/q', () => HttpResponse.json({ s: 'x'.repeat(200) })))
+        const cache = new Cache(60)
+        const r = await httpRequestTool(
+            { method: 'GET', url: 'https://api.test/q', body_mode: 'inline' },
+            cache,
+        )
+        expect(isError(r)).toBe(true)
+        if (isError(r)) expect(r.error.kind).toBe('body_too_large_for_inline')
+        Reflect.deleteProperty(process.env, 'MAGPIE_INLINE_BODY_CAP')
     })
 
     describe('with MAGPIE_FILES_ROOT', () => {
