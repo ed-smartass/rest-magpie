@@ -72,7 +72,12 @@ fetch  → cache  → schema (default)  → jq mask  → field value
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
-        "-v", "/host/uploads:/uploads:ro",
+        // Same-path bind mount + MAGPIE_FILES_ROOT: the agent passes
+        // ordinary host paths under /home/me/data and they "just work"
+        // inside the container. Outside-the-root paths are rejected
+        // with a clear `invalid_input` error.
+        "-v", "/home/me/data:/home/me/data",
+        "-e", "MAGPIE_FILES_ROOT=/home/me/data",
         "ghcr.io/ed-smartass/rest-magpie:latest"
       ]
     }
@@ -80,7 +85,7 @@ fetch  → cache  → schema (default)  → jq mask  → field value
 }
 ```
 
-The volume mount is only needed if you'll send `multipart.files[].path` or use `download_to`.
+The same-path bind mount is the recommended Docker pattern — agent paths translate transparently. Drop `MAGPIE_FILES_ROOT` if you want no path constraint (and you're sure about the security tradeoffs).
 
 ## Tools
 
@@ -212,6 +217,7 @@ All env vars are optional. Defaults match common-sense limits.
 | `MAGPIE_SCHEMA_MAX_DEPTH` | 10 | recursion depth for schema renderers |
 | `MAGPIE_SCHEMA_MAX_OBJECT_KEYS` | 200 | per-object key cap |
 | `MAGPIE_SCHEMA_SAMPLE_MAX_STRING` | 100 | string truncation in samples |
+| `MAGPIE_FILES_ROOT` | _(unset)_ | restricts `multipart.files[].path`, `download_to`, and `save_to` to canonical paths under this prefix; unset means no constraint |
 
 ## Compared to alternatives
 

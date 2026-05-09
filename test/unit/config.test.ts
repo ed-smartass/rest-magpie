@@ -24,6 +24,17 @@ describe('config', () => {
         expect(c.schemaMaxDepth).toBe(10)
         expect(c.schemaMaxObjectKeys).toBe(200)
         expect(c.schemaSampleMaxString).toBe(100)
+        expect(c.filesRoot).toBeUndefined()
+    })
+
+    it('captures MAGPIE_FILES_ROOT as an absolute resolved path', () => {
+        process.env.MAGPIE_FILES_ROOT = '/data/uploads/'
+        expect(loadConfig().filesRoot).toBe('/data/uploads')
+    })
+
+    it('treats empty MAGPIE_FILES_ROOT as unset', () => {
+        process.env.MAGPIE_FILES_ROOT = ''
+        expect(loadConfig().filesRoot).toBeUndefined()
     })
 
     it('respects integer env vars', () => {

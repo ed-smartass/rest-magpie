@@ -12,6 +12,7 @@ Initial release.
 - In-memory cache with 10-minute TTL.
 - `download_to` for streaming binary responses straight to disk (sha256 computed inline).
 - Configurable via `MAGPIE_*` env vars (timeouts, size caps, schema depth/key limits, TLS).
+- `MAGPIE_FILES_ROOT` env: when set, restricts `multipart.files[].path`, `download_to`, and `save_to` to canonical paths under this prefix; surfaces the constraint in tool descriptions for the agent. Unset = no constraint (npm-mode default).
 - Unified error envelope with stable `kind` codes.
-- npm + Docker (alpine multistage) distribution.
+- npm + Docker (alpine multistage) distribution. Recommended Docker pattern is a same-path bind mount paired with `MAGPIE_FILES_ROOT` — agent paths "just work" without host↔container translation.
 - CI on Node 20 / 22 with docker smoke job.

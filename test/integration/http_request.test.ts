@@ -89,4 +89,119 @@ describe('http_request tool', () => {
         expect(isError(r)).toBe(true)
         if (isError(r)) expect(r.error.kind).toBe('invalid_input')
     })
+
+    describe('with MAGPIE_FILES_ROOT', () => {
+        const key = 'MAGPIE_FILES_ROOT'
+
+        afterEach(() => {
+            delete process.env[key]
+            resetConfigCache()
+        })
+
+        it('rejects download_to outside the root', async () => {
+            process.env[key] = '/tmp/magpie-data'
+            resetConfigCache()
+            const cache = new Cache(60)
+            const r = await httpRequestTool(
+                { method: 'GET', url: 'https://api.test/x', download_to: '/tmp/elsewhere/out.bin' },
+                cache,
+            )
+            expect(isError(r)).toBe(true)
+            if (isError(r)) {
+                expect(r.error.kind).toBe('invalid_input')
+                expect(r.error.message).toContain('/tmp/magpie-data')
+                expect(r.error.message).toContain('download_to')
+            }
+        })
+
+        it('rejects multipart file path outside the root', async () => {
+            process.env[key] = '/tmp/magpie-data'
+            resetConfigCache()
+            const cache = new Cache(60)
+            const r = await httpRequestTool(
+                {
+                    method: 'POST',
+                    url: 'https://api.test/upload',
+                    multipart: { files: { photo: { path: '/etc/passwd' } } },
+                },
+                cache,
+            )
+            expect(isError(r)).toBe(true)
+            if (isError(r)) {
+                expect(r.error.kind).toBe('invalid_input')
+                expect(r.error.message).toContain('photo')
+            }
+        })
+
+        it('rejects path traversal escape via ..', async () => {
+            process.env[key] = '/tmp/magpie-data'
+            resetConfigCache()
+            const cache = new Cache(60)
+            const r = await httpRequestTool(
+                {
+                    method: 'GET',
+                    url: 'https://api.test/x',
+                    download_to: '/tmp/magpie-data/../../etc/shadow',
+                },
+                cache,
+            )
+            expect(isError(r)).toBe(true)
+            if (isError(r)) expect(r.error.kind).toBe('invalid_input')
+        })
+
+        it('allows download_to under the root', async () => {
+            process.env[key] = '/tmp/magpie-data'
+            resetConfigCache()
+            server.use(
+                http.get(
+                    'https://api.test/file',
+                    () =>
+                        new Response('hello', {
+                            headers: { 'content-type': 'application/octet-stream' },
+                        }),
+                ),
+            )
+            const cache = new Cache(60)
+            const fs = await import('node:fs')
+            fs.mkdirSync('/tmp/magpie-data', { recursive: true })
+            const r = await httpRequestTool(
+                {
+                    method: 'GET',
+                    url: 'https://api.test/file',
+                    download_to: '/tmp/magpie-data/out.bin',
+                },
+                cache,
+            )
+            expect(isError(r)).toBe(false)
+            fs.rmSync('/tmp/magpie-data/out.bin', { force: true })
+        })
+
+        it('does not constrain when MAGPIE_FILES_ROOT is unset', async () => {
+            const cache = new Cache(60)
+            // Even though /tmp/anywhere isn't restricted, the actual fetch will fail
+            // for unrelated reasons (no msw handler) — we only care that the validation
+            // step does NOT block; classifyHttpError will surface the network failure.
+            server.use(
+                http.get(
+                    'https://api.test/anywhere',
+                    () =>
+                        new Response('ok', {
+                            headers: { 'content-type': 'application/octet-stream' },
+                        }),
+                ),
+            )
+            const r = await httpRequestTool(
+                {
+                    method: 'GET',
+                    url: 'https://api.test/anywhere',
+                    download_to: '/tmp/anywhere-' + Date.now() + '.bin',
+                },
+                cache,
+            )
+            // Should NOT be invalid_input from files_root validation (any other outcome is fine).
+            if (isError(r)) {
+                expect(r.error.kind).not.toBe('invalid_input')
+            }
+        })
+    })
 })

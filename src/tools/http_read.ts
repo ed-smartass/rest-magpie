@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto'
 import { writeFile } from 'node:fs/promises'
+import { getConfig } from '../config.js'
 import type { Cache } from '../core/cache.js'
 import { makeError } from '../core/errors.js'
 import { runJq } from '../core/jq.js'
+import { ensureUnderRoot } from '../core/paths.js'
 import type { HttpReadParams, HttpReadResult, Result } from '../types.js'
 
 export const httpReadTool = async (
@@ -11,6 +13,11 @@ export const httpReadTool = async (
 ): Promise<Result<HttpReadResult>> => {
     const entry = cache.get(params.cache_id)
     if (!entry) return makeError('cache_miss', 'unknown cache_id: ' + params.cache_id)
+
+    if (params.save_to) {
+        const err = ensureUnderRoot(params.save_to, getConfig().filesRoot, 'save_to')
+        if (err) return err
+    }
 
     if (entry.body_kind === 'binary') {
         if (params.mask)
