@@ -118,7 +118,7 @@ describe('http_request tool', () => {
         }
     })
 
-    it('errors body_too_large_for_inline when explicit inline > cap', async () => {
+    it('errors body_too_large_for_inline when explicit inline > cap, surfaces cache_id, body retrievable', async () => {
         process.env.MAGPIE_INLINE_BODY_CAP = '10'
         resetConfigCache()
         server.use(http.get('https://api.test/q', () => HttpResponse.json({ s: 'x'.repeat(200) })))
@@ -128,7 +128,18 @@ describe('http_request tool', () => {
             cache,
         )
         expect(isError(r)).toBe(true)
-        if (isError(r)) expect(r.error.kind).toBe('body_too_large_for_inline')
+        if (isError(r)) {
+            expect(r.error.kind).toBe('body_too_large_for_inline')
+            // The error message tells the agent to recover via http_read with
+            // the surfaced cache_id, so the cache_id must actually be in the
+            // detail and the entry must be in the cache.
+            const cache_id = r.error.detail?.cache_id as string | undefined
+            expect(typeof cache_id).toBe('string')
+            expect(cache_id).toMatch(/^req_/)
+            const entry = cache.get(cache_id as string)
+            expect(entry).toBeDefined()
+            expect(entry?.body).toEqual({ s: 'x'.repeat(200) })
+        }
         Reflect.deleteProperty(process.env, 'MAGPIE_INLINE_BODY_CAP')
     })
 

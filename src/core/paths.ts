@@ -19,9 +19,9 @@ export const isUnderRoot = (candidate: string, root: string): boolean => {
     const rp = canonicalize(candidate)
     const rr = canonicalize(root)
     if (rp === rr) return true
-    // root='/' or root canonicalising to a single sep means rr+sep would
-    // become '//', which prefix-matches everything-incorrectly. Anything
-    // is under '/', so short-circuit.
+    // root='/' or any root canonicalising to a single sep means rr+sep
+    // would become '//' — which fails to prefix-match an absolute path
+    // like '/foo'. Anything is under '/', so short-circuit.
     if (rr === sep) return true
     return rp.startsWith(rr + sep)
 }

@@ -138,4 +138,36 @@ describe('buildMultipart', () => {
             }),
         ).toThrow(/exactly one/)
     })
+
+    it('rejects malformed base64 (non-alphabet characters)', () => {
+        expect(() =>
+            buildMultipart({
+                files: {
+                    f: { content_base64: 'not!valid$base64', filename: 'x.bin' },
+                },
+            }),
+        ).toThrow(/not valid base64/)
+    })
+
+    it('rejects malformed base64 (wrong length / padding)', () => {
+        // 'abc' is 3 chars, not a multiple of 4 — rejected.
+        expect(() =>
+            buildMultipart({
+                files: {
+                    f: { content_base64: 'abc', filename: 'x.bin' },
+                },
+            }),
+        ).toThrow(/not valid base64/)
+    })
+
+    it('rejects non-string content_base64', () => {
+        expect(() =>
+            buildMultipart({
+                files: {
+                    // biome-ignore lint/suspicious/noExplicitAny: schema-bypass simulation
+                    f: { content_base64: 12345 as any, filename: 'x.bin' },
+                },
+            }),
+        ).toThrow(/must be a string/)
+    })
 })

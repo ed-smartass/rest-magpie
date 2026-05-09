@@ -38,4 +38,30 @@ describe('inferNextStepHints', () => {
     it('returns just length for an empty array', () => {
         expect(inferNextStepHints([])).toEqual(['length'])
     })
+
+    it('skips identifier-unsafe keys in projection shorthand for object arrays', () => {
+        // Keys with hyphens and digits would emit syntactically invalid jq
+        // when interpolated raw into `map({...})`. Only safe keys land.
+        const hints = inferNextStepHints([{ 'user-id': 1, '2fa_enabled': true, name: 'a' }])
+        expect(hints.some((h) => h.includes('user-id'))).toBe(false)
+        expect(hints.some((h) => h.includes('2fa_enabled'))).toBe(false)
+        // 'name' is identifier-safe and should appear; if it's the only safe
+        // key the single-key form is used.
+        expect(hints.some((h) => h.includes('{name}') || h.includes('name'))).toBe(true)
+    })
+
+    it('emits bracket-quoted form for non-identifier array-field keys', () => {
+        // The array-field is targeted with `."weird-key"` instead of crashing.
+        const hints = inferNextStepHints({ 'weird-key': [{ id: 1 }] })
+        expect(hints.some((h) => h.startsWith('."weird-key"'))).toBe(true)
+        // No raw `.weird-key` (which jq would parse as subtraction).
+        expect(hints.every((h) => !/^\.weird-key\b/.test(h))).toBe(true)
+    })
+
+    it('skips object projection when no identifier-safe keys exist', () => {
+        const hints = inferNextStepHints({ 'a-b': 1, '2x': 2 })
+        // `keys` and `to_entries` are always-safe; no `{a-b}` style hint.
+        expect(hints).toContain('keys')
+        expect(hints.every((h) => !h.includes('a-b') && !h.includes('2x'))).toBe(true)
+    })
 })
