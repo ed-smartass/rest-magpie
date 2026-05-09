@@ -60,7 +60,6 @@ const collect = (raw: string, mode: JqOutputMode): unknown => {
     const lines = raw.split(/\r?\n/).filter((l) => l.length > 0)
     const values = lines.map((l) => JSON.parse(l))
     if (mode === 'first') return values[0]
-    if (values.length === 1) return values[0]
     return values
 }
 

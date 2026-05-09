@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { runJq } from '../../src/core/jq.js'
 
 describe('runJq', () => {
-    it('returns scalar for single-output', async () => {
+    it('wraps single-output in array (output_mode=all)', async () => {
         const r = await runJq({ a: 1, b: 2 }, '.a', 'all')
-        expect(r).toEqual({ ok: true, value: 1 })
+        expect(r).toEqual({ ok: true, value: [1] })
     })
 
     it('collects multi-output as array (output_mode=all)', async () => {
