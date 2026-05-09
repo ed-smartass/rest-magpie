@@ -5,12 +5,14 @@ import { type HttpRunResult, performHttp } from '../core/http.js'
 import { ensureUnderRoot } from '../core/paths.js'
 import { renderNonJsonDescriptor, renderSchema } from '../core/schema/index.js'
 import type {
+    BodyInclusion,
     BodyKind,
+    BodyMode,
     CacheEntry,
     HttpRequestParams,
     HttpRequestResult,
-    IncludeBody,
     NonJsonSchemaDescriptor,
+    ResolvedBodyMode,
     ResponseMeta,
     Result,
     Schema,
@@ -20,10 +22,22 @@ export const httpRequestTool = async (
     params: HttpRequestParams,
     cache: Cache,
 ): Promise<Result<HttpRequestResult>> => {
-    if (params.download_to && params.include_body === true) {
+    // Loud rejection of the legacy v0.1.x parameter so agents and humans
+    // see the migration path immediately rather than silently getting the
+    // default behaviour.
+    if (Object.hasOwn(params as object, 'include_body')) {
+        return makeError(
+            'unsupported_field',
+            "`include_body` is no longer supported. Use `body_mode: 'auto' | 'schema' | 'head' | 'inline'` (default 'auto'). " +
+                "Migration: include_body=true → body_mode='inline'; include_body=false → body_mode='schema'; include_body='auto' → body_mode='auto' (or omit).",
+            { field: 'include_body' },
+        )
+    }
+
+    if (params.download_to && params.body_mode === 'inline') {
         return makeError(
             'invalid_input',
-            'download_to is mutually exclusive with include_body=true',
+            "download_to is mutually exclusive with body_mode: 'inline'",
         )
     }
 
@@ -46,11 +60,6 @@ export const httpRequestTool = async (
         return classifyHttpError(e)
     }
 
-    const include = decideIncludeBody(
-        params.include_body ?? 'auto',
-        runResult.body_kind,
-        runResult.bodyBytes,
-    )
     const cache_id = cache.newId()
     const schemaFormat = params.schema_format ?? 'paths'
 
@@ -58,7 +67,6 @@ export const httpRequestTool = async (
     if (runResult.body_kind === 'json') {
         schema = renderSchema(schemaFormat, runResult.parsedBody, runResult.bodyBytes)
     } else if (runResult.downloadPath) {
-        // Binary streamed straight to disk; compose the descriptor from runResult metadata.
         const descriptor: NonJsonSchemaDescriptor = {
             type: 'binary',
             content_type: runResult.contentType,
@@ -74,6 +82,15 @@ export const httpRequestTool = async (
         )
     }
 
+    const requestedMode: BodyMode = params.body_mode ?? 'auto'
+    const resolution = resolveBodyMode(requestedMode, runResult.body_kind, runResult.bodyBytes)
+    if (!resolution.ok) return resolution.error
+
+    const body_inclusion: BodyInclusion = buildInclusion(
+        resolution.resolved_mode,
+        resolution.reason,
+    )
+
     const meta: ResponseMeta = {
         url: runResult.finalUrl,
         method: params.method,
@@ -82,7 +99,7 @@ export const httpRequestTool = async (
         body_bytes: runResult.bodyBytes,
         content_type: runResult.contentType,
         body_kind: runResult.body_kind,
-        body_included: include,
+        body_inclusion,
         redirect_chain: runResult.redirectChain,
         download_path: runResult.downloadPath,
     }
@@ -102,16 +119,113 @@ export const httpRequestTool = async (
         status: runResult.status,
         meta,
         schema,
-        ...(include ? { body: runResult.parsedBody } : {}),
+        ...(resolution.resolved_mode === 'inline' ? { body: runResult.parsedBody } : {}),
     }
     return result
 }
 
-const decideIncludeBody = (mode: IncludeBody, kind: BodyKind, bytes: number): boolean => {
-    if (kind === 'binary') return false
-    if (mode === true) return true
-    if (mode === false) return false
-    return bytes <= getConfig().autoIncludeBodyBytes
+interface ResolveOk {
+    ok: true
+    resolved_mode: ResolvedBodyMode
+    reason?: string
+}
+interface ResolveErr {
+    ok: false
+    error: ReturnType<typeof makeError>
+}
+type ResolveResult = ResolveOk | ResolveErr
+
+const resolveBodyMode = (requested: BodyMode, kind: BodyKind, bytes: number): ResolveResult => {
+    const cfg = getConfig()
+
+    // Binaries are never inlined or previewed inline regardless of mode.
+    if (kind === 'binary') {
+        if (requested === 'inline') {
+            return {
+                ok: false,
+                error: makeError(
+                    'invalid_input',
+                    "body_mode: 'inline' is not valid for binary bodies; use download_to or http_read with save_to",
+                    { body_kind: kind, body_mode: requested },
+                ),
+            }
+        }
+        return { ok: true, resolved_mode: 'schema' }
+    }
+
+    // Empty: schema by default (consistent with v0.1.x); explicit modes are
+    // honoured but the body is null either way.
+    if (kind === 'empty') {
+        if (requested === 'auto' || requested === 'schema') {
+            return { ok: true, resolved_mode: 'schema' }
+        }
+        return { ok: true, resolved_mode: requested as ResolvedBodyMode }
+    }
+
+    // JSON / text from here on.
+    if (requested === 'schema') return { ok: true, resolved_mode: 'schema' }
+    if (requested === 'inline') {
+        if (bytes > cfg.inlineBodyCapBytes) {
+            return {
+                ok: false,
+                error: makeError(
+                    'body_too_large_for_inline',
+                    'Body is ' +
+                        bytes +
+                        ' bytes; refusing to inline (cap ' +
+                        cfg.inlineBodyCapBytes +
+                        '). The body is cached — use http_read with the returned cache_id to extract fields via a jq mask.',
+                    { body_bytes: bytes, inline_cap_bytes: cfg.inlineBodyCapBytes },
+                ),
+            }
+        }
+        return { ok: true, resolved_mode: 'inline' }
+    }
+    if (requested === 'head') {
+        // Head behaviour is fully wired in a follow-up PR; for now the
+        // resolved_mode is reported truthfully but the body_preview field
+        // is built downstream.
+        return { ok: true, resolved_mode: 'head' }
+    }
+    // requested === 'auto'
+    if (bytes <= cfg.inlineThresholdBytes) {
+        return { ok: true, resolved_mode: 'inline' }
+    }
+    if (bytes <= cfg.headPreviewThresholdBytes) {
+        return {
+            ok: true,
+            resolved_mode: 'head',
+            reason:
+                'body ' +
+                bytes +
+                ' B exceeds inline threshold ' +
+                cfg.inlineThresholdBytes +
+                ' B; auto resolved to head',
+        }
+    }
+    return {
+        ok: true,
+        resolved_mode: 'schema',
+        reason:
+            'body ' +
+            bytes +
+            ' B exceeds head preview threshold ' +
+            cfg.headPreviewThresholdBytes +
+            ' B; auto resolved to schema',
+    }
+}
+
+const buildInclusion = (resolved: ResolvedBodyMode, reason?: string): BodyInclusion => {
+    const cfg = getConfig()
+    return {
+        resolved_mode: resolved,
+        inline_threshold_bytes: cfg.inlineThresholdBytes,
+        head_preview_threshold_bytes: cfg.headPreviewThresholdBytes,
+        head_preview_items: cfg.headPreviewItems,
+        head_preview_string_chars: cfg.headPreviewStringChars,
+        inline_cap_bytes: cfg.inlineBodyCapBytes,
+        ...(reason ? { reason } : {}),
+    }
 }
 
 const classifyHttpError = (e: unknown) => {

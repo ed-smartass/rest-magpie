@@ -17,7 +17,12 @@ describe('config', () => {
         expect(c.defaultTimeoutMs).toBe(30000)
         expect(c.maxResponseBytes).toBe(50 * 1024 * 1024)
         expect(c.cacheTtlSeconds).toBe(600)
-        expect(c.autoIncludeBodyBytes).toBe(8192)
+        expect(c.inlineThresholdBytes).toBe(8192)
+        expect(c.headPreviewThresholdBytes).toBe(64 * 1024)
+        expect(c.headPreviewItems).toBe(5)
+        expect(c.headPreviewStringChars).toBe(200)
+        expect(c.inlineBodyCapBytes).toBe(256 * 1024)
+        expect(c.maxInlineFileBytes).toBe(10 * 1024 * 1024)
         expect(c.jqTimeoutMs).toBe(5000)
         expect(c.useNativeJq).toBe(false)
         expect(c.tlsInsecure).toBe(false)
@@ -49,10 +54,12 @@ describe('config', () => {
 
     it('respects integer env vars', () => {
         process.env.MAGPIE_DEFAULT_TIMEOUT_MS = '5000'
-        process.env.MAGPIE_AUTO_INCLUDE_BODY_BYTES = '1024'
+        process.env.MAGPIE_INLINE_THRESHOLD_BYTES = '1024'
+        process.env.MAGPIE_INLINE_BODY_CAP = '4096'
         const c = loadConfig()
         expect(c.defaultTimeoutMs).toBe(5000)
-        expect(c.autoIncludeBodyBytes).toBe(1024)
+        expect(c.inlineThresholdBytes).toBe(1024)
+        expect(c.inlineBodyCapBytes).toBe(4096)
     })
 
     it('respects boolean env vars (1/true/yes/on)', () => {

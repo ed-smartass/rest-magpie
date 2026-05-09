@@ -20,7 +20,14 @@ const makeEntry = (cache: Cache, body: unknown): string => {
             body_bytes: JSON.stringify(body).length,
             content_type: 'application/json',
             body_kind: 'json',
-            body_included: false,
+            body_inclusion: {
+                resolved_mode: 'schema',
+                inline_threshold_bytes: 8192,
+                head_preview_threshold_bytes: 65536,
+                head_preview_items: 5,
+                head_preview_string_chars: 200,
+                inline_cap_bytes: 262144,
+            },
             redirect_chain: [],
         },
     }

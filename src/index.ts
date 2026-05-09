@@ -75,10 +75,13 @@ const HTTP_REQUEST_DESC =
     '(1) call http_request to get { schema, cache_id }; ' +
     '(2) call http_read with cache_id and a jq mask to extract only the field(s) you need. ' +
     'This keeps your context small even on multi-MB responses.\n\n' +
-    'Set include_body: true ONLY when the body is known-small (<8KB) AND you need every field. ' +
-    'On a 200KB JSON, true puts ~12K tokens into your context for data you will never use; ' +
-    'on a multi-MB response it pushes you toward context overflow. ' +
-    'When in doubt, leave include_body unset (auto: schema-only when >8KB, inline below).\n\n' +
+    'body_mode controls how much of the body comes back inline:\n' +
+    '  schema (no body — schema only)\n' +
+    '  head   (schema + truncated preview of arrays/strings — middle ground)\n' +
+    '  inline (schema + full body — costly; capped by MAGPIE_INLINE_BODY_CAP)\n' +
+    '  auto   (default — server picks based on byte thresholds)\n' +
+    'Reach for inline ONLY when body is known-small AND every field is needed; ' +
+    'a 200KB JSON inlined is ~12K tokens of context for data you may never use.\n\n' +
     'Multipart uploads stream files via chunked transfer encoding (no Content-Length). ' +
     'Most servers accept this; some legacy proxies / primitive test servers reject it.\n\n' +
     'Cookbook:\n' +
@@ -147,9 +150,10 @@ const HTTP_REQUEST_SCHEMA = {
             enum: ['paths', 'shape', 'sample', 'json_schema'],
             description: "Default 'paths'.",
         },
-        include_body: {
-            description: "true | false | 'auto' (default).",
-            oneOf: [{ type: 'boolean' }, { type: 'string', enum: ['auto'] }],
+        body_mode: {
+            type: 'string',
+            enum: ['auto', 'schema', 'head', 'inline'],
+            description: "Default 'auto'. schema | head | inline | auto.",
         },
         download_to: { type: 'string', description: 'Stream body to file (skips cache).' },
     },

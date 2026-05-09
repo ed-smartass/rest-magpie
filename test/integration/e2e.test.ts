@@ -29,7 +29,7 @@ describe('e2e', () => {
                 method: 'GET',
                 url: 'https://api.test/u',
                 schema_format: 'paths',
-                include_body: false,
+                body_mode: 'schema',
             },
             cache,
         )

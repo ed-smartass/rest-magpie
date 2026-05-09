@@ -7,8 +7,15 @@ export type BodyKind = 'json' | 'text' | 'binary' | 'empty'
 // Schema format selectors.
 export type SchemaFormat = 'paths' | 'shape' | 'sample' | 'json_schema'
 
-// Auto-include policy for body inlining.
-export type IncludeBody = boolean | 'auto'
+// Body inclusion mode.
+//   schema   → no body in response (just the rendered schema)
+//   head     → schema + body_preview (truncated arrays/strings)
+//   inline   → schema + body (full body, capped by MAGPIE_INLINE_BODY_CAP)
+//   auto     → server picks based on byte thresholds (default)
+export type BodyMode = 'auto' | 'schema' | 'head' | 'inline'
+
+// Concrete mode after `auto` resolution. Reported on every response.
+export type ResolvedBodyMode = 'schema' | 'head' | 'inline'
 
 // jq multi-output collection mode.
 export type JqOutputMode = 'first' | 'all'
@@ -38,8 +45,18 @@ export interface HttpRequestParams {
     follow_redirects?: boolean
     tls_insecure?: boolean
     schema_format?: SchemaFormat
-    include_body?: IncludeBody
+    body_mode?: BodyMode
     download_to?: string
+}
+
+export interface BodyInclusion {
+    resolved_mode: ResolvedBodyMode
+    inline_threshold_bytes: number
+    head_preview_threshold_bytes: number
+    head_preview_items: number
+    head_preview_string_chars: number
+    inline_cap_bytes: number
+    reason?: string
 }
 
 export interface ResponseMeta {
@@ -50,7 +67,7 @@ export interface ResponseMeta {
     body_bytes: number
     content_type: string
     body_kind: BodyKind
-    body_included: boolean
+    body_inclusion: BodyInclusion
     redirect_chain: string[]
     download_path?: string
 }
@@ -75,6 +92,8 @@ export interface HttpRequestResult {
     status: number
     meta: ResponseMeta
     schema: Schema
+    next_step_hints?: string[]
+    body_preview?: unknown
     body?: unknown
 }
 
@@ -107,6 +126,8 @@ export type ErrorKind =
     | 'tls_error'
     | 'redirect_loop'
     | 'body_too_large'
+    | 'body_too_large_for_inline'
+    | 'unsupported_field'
     | 'cache_miss'
     | 'jq_syntax_error'
     | 'jq_runtime_error'

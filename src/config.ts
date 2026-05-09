@@ -4,7 +4,12 @@ export interface Config {
     defaultTimeoutMs: number
     maxResponseBytes: number
     cacheTtlSeconds: number
-    autoIncludeBodyBytes: number
+    inlineThresholdBytes: number
+    headPreviewThresholdBytes: number
+    headPreviewItems: number
+    headPreviewStringChars: number
+    inlineBodyCapBytes: number
+    maxInlineFileBytes: number
     jqTimeoutMs: number
     useNativeJq: boolean
     tlsInsecure: boolean
@@ -42,7 +47,12 @@ export const loadConfig = (): Config => {
         defaultTimeoutMs: intEnv('MAGPIE_DEFAULT_TIMEOUT_MS', 30000),
         maxResponseBytes: intEnv('MAGPIE_MAX_RESPONSE_BYTES', 50 * 1024 * 1024),
         cacheTtlSeconds: intEnv('MAGPIE_CACHE_TTL_SECONDS', 600),
-        autoIncludeBodyBytes: intEnv('MAGPIE_AUTO_INCLUDE_BODY_BYTES', 8192),
+        inlineThresholdBytes: intEnv('MAGPIE_INLINE_THRESHOLD_BYTES', 8192),
+        headPreviewThresholdBytes: intEnv('MAGPIE_HEAD_PREVIEW_THRESHOLD', 64 * 1024),
+        headPreviewItems: intEnv('MAGPIE_HEAD_PREVIEW_ITEMS', 5),
+        headPreviewStringChars: intEnv('MAGPIE_HEAD_PREVIEW_STRING', 200),
+        inlineBodyCapBytes: intEnv('MAGPIE_INLINE_BODY_CAP', 256 * 1024),
+        maxInlineFileBytes: intEnv('MAGPIE_MAX_INLINE_FILE_BYTES', 10 * 1024 * 1024),
         jqTimeoutMs: intEnv('MAGPIE_JQ_TIMEOUT_MS', 5000),
         useNativeJq: boolEnv('MAGPIE_USE_NATIVE_JQ', false),
         tlsInsecure: boolEnv('MAGPIE_TLS_INSECURE', false),
