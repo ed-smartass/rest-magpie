@@ -121,7 +121,7 @@ interface ResolvedBody {
 
 const resolveBody = (p: HttpRequestParams): ResolvedBody => {
     const set = (['body', 'body_raw', 'multipart'] as const).filter(
-        (k) => (p as Record<string, unknown>)[k] !== undefined,
+        (k) => (p as unknown as Record<string, unknown>)[k] !== undefined,
     )
     if (set.length > 1) {
         const e = new Error('invalid_input: only one of body | body_raw | multipart allowed')
