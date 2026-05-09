@@ -139,3 +139,55 @@ describe('performHttp multipart', () => {
         expect(receivedBytes).toBeGreaterThan(20)
     })
 })
+
+describe('performHttp redirects and limits', () => {
+    it('records redirect chain', async () => {
+        server.use(
+            http.get('https://api.test/r1', () =>
+                HttpResponse.redirect('https://api.test/r2', 302),
+            ),
+            http.get('https://api.test/r2', () =>
+                HttpResponse.redirect('https://api.test/r3', 302),
+            ),
+            http.get('https://api.test/r3', () => HttpResponse.json({ done: true })),
+        )
+        const r = await performHttp({ method: 'GET', url: 'https://api.test/r1' }, {})
+        expect(r.redirectChain).toEqual(['https://api.test/r2', 'https://api.test/r3'])
+        expect(r.status).toBe(200)
+    })
+
+    it('respects follow_redirects=false', async () => {
+        server.use(
+            http.get('https://api.test/once', () =>
+                HttpResponse.redirect('https://api.test/done', 302),
+            ),
+        )
+        const r = await performHttp(
+            { method: 'GET', url: 'https://api.test/once', follow_redirects: false },
+            {},
+        )
+        expect(r.status).toBe(302)
+        expect(r.redirectChain).toEqual([])
+    })
+
+    it('rejects body_too_large', async () => {
+        const key = 'MAGPIE_MAX_RESPONSE_BYTES'
+        process.env[key] = '100'
+        const { resetConfigCache } = await import('../../src/config.js')
+        resetConfigCache()
+        server.use(
+            http.get(
+                'https://api.test/big',
+                () =>
+                    new Response('x'.repeat(500), {
+                        headers: { 'content-type': 'text/plain' },
+                    }),
+            ),
+        )
+        await expect(
+            performHttp({ method: 'GET', url: 'https://api.test/big' }, {}),
+        ).rejects.toThrow(/body_too_large/)
+        delete process.env[key]
+        resetConfigCache()
+    })
+})

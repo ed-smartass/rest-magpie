@@ -1,4 +1,4 @@
-import type { Dispatcher } from 'undici'
+import { Agent, type Dispatcher } from 'undici'
 import { getConfig } from '../config.js'
 import type { BodyKind, HttpRequestParams } from '../types.js'
 import { classifyContentType, parseCharset } from './content_type.js'
@@ -35,35 +35,81 @@ export const performHttp = async (
         headers['content-type'] = params.content_type ?? bodyCt ?? 'application/octet-stream'
     }
 
-    const controller = new AbortController()
-    const timeoutMs = params.timeout_ms ?? cfg.defaultTimeoutMs
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    const insecure = params.tls_insecure ?? cfg.tlsInsecure
+    const dispatcher: Dispatcher | undefined =
+        opts.dispatcher ??
+        (insecure ? new Agent({ connect: { rejectUnauthorized: false } }) : undefined)
 
-    let res: Response
-    try {
+    const followLimit = (params.follow_redirects ?? true) ? 10 : 0
+    const redirectChain: string[] = []
+    let currentUrl = url
+    let resp: Response | undefined
+
+    for (let i = 0; i <= followLimit; i++) {
         const init: Record<string, unknown> = {
             method: params.method,
             headers,
             body,
-            signal: controller.signal,
             redirect: 'manual',
+            signal: AbortSignal.timeout(params.timeout_ms ?? cfg.defaultTimeoutMs),
         }
-        if (opts.dispatcher) init.dispatcher = opts.dispatcher
-        res = await fetch(url, init as RequestInit)
-    } finally {
-        clearTimeout(timer)
+        if (dispatcher) init.dispatcher = dispatcher
+
+        resp = await fetch(currentUrl, init as RequestInit)
+
+        const loc = resp.headers.get('location')
+        if (resp.status >= 300 && resp.status < 400 && loc && i < followLimit) {
+            const next = new URL(loc, currentUrl).toString()
+            redirectChain.push(next)
+            currentUrl = next
+            continue
+        }
+        break
     }
 
-    const ct = res.headers.get('content-type') ?? ''
-    const buffer = Buffer.from(await res.arrayBuffer())
-    if (buffer.length > cfg.maxResponseBytes) {
-        const e = new Error('response body exceeds MAGPIE_MAX_RESPONSE_BYTES')
-        ;(e as { kind?: string }).kind = 'body_too_large'
+    if (!resp) {
+        const e = new Error('network_error: no response')
+        ;(e as { kind?: string }).kind = 'network_error'
         throw e
     }
 
+    if (
+        redirectChain.length >= 10 &&
+        resp.status >= 300 &&
+        resp.status < 400 &&
+        resp.headers.get('location')
+    ) {
+        const e = new Error('redirect_loop')
+        ;(e as { kind?: string }).kind = 'redirect_loop'
+        throw e
+    }
+
+    // Stream the body and enforce MAGPIE_MAX_RESPONSE_BYTES early.
+    const reader = resp.body?.getReader()
+    const chunks: Uint8Array[] = []
+    let total = 0
+    if (reader) {
+        for (;;) {
+            const { value, done } = await reader.read()
+            if (done) break
+            if (value) {
+                total += value.length
+                if (total > cfg.maxResponseBytes) {
+                    reader.cancel().catch(() => {})
+                    const e = new Error('body_too_large')
+                    ;(e as { kind?: string }).kind = 'body_too_large'
+                    throw e
+                }
+                chunks.push(value)
+            }
+        }
+    }
+    const buffer = Buffer.concat(chunks.map((u) => Buffer.from(u)))
+
+    const ct = resp.headers.get('content-type') ?? ''
     const kind: BodyKind =
-        res.status === 204 || buffer.length === 0 ? 'empty' : classifyContentType(ct)
+        resp.status === 204 || buffer.length === 0 ? 'empty' : classifyContentType(ct)
+
     let parsed: unknown | string | Buffer | null
     if (kind === 'json') {
         parsed = JSON.parse(buffer.toString('utf8'))
@@ -76,14 +122,14 @@ export const performHttp = async (
     }
 
     return {
-        status: res.status,
-        headers: flattenHeaders(res.headers),
+        status: resp.status,
+        headers: flattenHeaders(resp.headers),
         body_kind: kind,
         parsedBody: parsed,
         contentType: ct,
         bodyBytes: buffer.length,
-        finalUrl: url,
-        redirectChain: [],
+        finalUrl: currentUrl,
+        redirectChain,
         durationMs: Date.now() - start,
     }
 }
