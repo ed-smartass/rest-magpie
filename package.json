@@ -16,7 +16,8 @@
     "scripts": {
         "build": "tsup",
         "dev": "tsup --watch",
-        "test": "vitest run",
+        "test": "npm run build && vitest run",
+        "test:fast": "vitest run --exclude '**/mcp-stdio.test.ts'",
         "test:watch": "vitest",
         "lint": "biome check .",
         "format": "biome format --write .",
