@@ -117,4 +117,42 @@ describe('http_read', () => {
         expect(r.result).toMatchObject({ saved_to: p, byte_count: 4 })
         expect(readFileSync(p).toString('hex')).toBe('deadbeef')
     })
+
+    it('rejects save_to outside MAGPIE_FILES_ROOT', async () => {
+        const key = 'MAGPIE_FILES_ROOT'
+        process.env[key] = '/tmp/magpie-data'
+        const { resetConfigCache } = await import('../../src/config.js')
+        resetConfigCache()
+
+        const cache = new Cache(60)
+        const id = cache.newId()
+        cache.put({
+            cache_id: id,
+            created_at: Date.now(),
+            body_kind: 'binary',
+            body: Buffer.from([0x01]),
+            status: 200,
+            meta: {
+                url: 'u',
+                method: 'GET',
+                duration_ms: 0,
+                response_headers: {},
+                body_bytes: 1,
+                content_type: 'application/octet-stream',
+                body_kind: 'binary',
+                body_included: false,
+                redirect_chain: [],
+            },
+        })
+        const r = await httpReadTool({ cache_id: id, save_to: '/etc/evil.bin' }, cache)
+        expect(isError(r)).toBe(true)
+        if (isError(r)) {
+            expect(r.error.kind).toBe('invalid_input')
+            expect(r.error.message).toContain('save_to')
+            expect(r.error.message).toContain('/tmp/magpie-data')
+        }
+
+        delete process.env[key]
+        resetConfigCache()
+    })
 })

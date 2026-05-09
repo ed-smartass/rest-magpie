@@ -2,6 +2,7 @@ import { getConfig } from '../config.js'
 import type { Cache } from '../core/cache.js'
 import { makeError } from '../core/errors.js'
 import { type HttpRunResult, performHttp } from '../core/http.js'
+import { ensureUnderRoot } from '../core/paths.js'
 import { renderNonJsonDescriptor, renderSchema } from '../core/schema/index.js'
 import type {
     BodyKind,
@@ -24,6 +25,18 @@ export const httpRequestTool = async (
             'invalid_input',
             'download_to is mutually exclusive with include_body=true',
         )
+    }
+
+    const filesRoot = getConfig().filesRoot
+    if (params.download_to) {
+        const err = ensureUnderRoot(params.download_to, filesRoot, 'download_to')
+        if (err) return err
+    }
+    if (params.multipart?.files) {
+        for (const [key, file] of Object.entries(params.multipart.files)) {
+            const err = ensureUnderRoot(file.path, filesRoot, 'multipart.files.' + key + '.path')
+            if (err) return err
+        }
     }
 
     let runResult: HttpRunResult
