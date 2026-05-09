@@ -296,8 +296,8 @@ Inferred via `genson-js`. `required` is **omitted** (single-sample inference is 
 - **Opt-in native:** if `MAGPIE_USE_NATIVE_JQ=1`, use `node-jq` (subprocess to system `jq` binary). Faster on large bodies; requires `jq` installed.
 - **Timeout:** 5000ms (env `MAGPIE_JQ_TIMEOUT_MS`). Implemented via `Promise.race` for wasm; via `subprocess.kill('SIGKILL')` for native.
 - **Multi-output:** jq programs like `.data[]` produce multiple JSON outputs.
-  - `output_mode: "all"` (default) → wrap in array.
-  - `output_mode: "first"` → first value only.
+  - `output_mode: "all"` (default) — when jq emits multiple outputs, collect them into an array; when it emits a single output, return that value as-is.
+  - `output_mode: "first"` — return the first emitted value (or `undefined` if jq emits nothing).
 - **Errors:**
   - Parse failure → `jq_syntax_error` with the parser message.
   - Runtime failure (e.g. `Cannot index array with string`) → `jq_runtime_error`.
