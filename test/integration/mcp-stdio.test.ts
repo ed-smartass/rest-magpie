@@ -1,5 +1,8 @@
 import { type ChildProcess, spawn } from 'node:child_process'
+import { mkdtempSync, rmSync, symlinkSync } from 'node:fs'
 import { type Server, createServer } from 'node:http'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -150,5 +153,34 @@ describe('MCP stdio black-box smoke', () => {
         const result = JSON.parse(call?.result?.content?.[0]?.text as string)
         expect(result.status).toBe(200)
         expect(result.meta.redirect_chain).toContain('http://localhost:' + port + '/final')
+    }, 15000)
+
+    // Regression: npx and `npm install -g` invoke the bin via a symlink in
+    // node_modules/.bin/, so process.argv[1] differs from the real dist path.
+    // The entrypoint guard must compare resolved real paths, not raw strings.
+    it('boots when invoked through a symlink (npx/.bin pattern)', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'rest-magpie-bin-'))
+        const link = join(dir, 'rest-magpie')
+        symlinkSync(resolve('dist/index.js'), link)
+        try {
+            const child = spawn('node', [link], { stdio: ['pipe', 'pipe', 'inherit'] })
+            const messages = collectResponses(child)
+            send(child, {
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'initialize',
+                params: {
+                    protocolVersion: '2024-11-05',
+                    capabilities: {},
+                    clientInfo: { name: 'smoke', version: '0' },
+                },
+            })
+            await waitForN(messages, 1)
+            child.kill()
+            const init = messages.find((m) => m.id === 1)
+            expect(init?.result).toBeDefined()
+        } finally {
+            rmSync(dir, { recursive: true, force: true })
+        }
     }, 15000)
 })

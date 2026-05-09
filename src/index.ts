@@ -1,3 +1,5 @@
+import { realpathSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
@@ -16,7 +18,7 @@ export const createServer = () => {
           '.'
         : ''
     const server = new Server(
-        { name: 'rest-magpie', version: '0.1.0' },
+        { name: 'rest-magpie', version: '0.1.1' },
         { capabilities: { tools: {} } },
     )
 
@@ -149,8 +151,18 @@ const HTTP_INSPECT_SCHEMA = {
     required: ['cache_id', 'schema_format'],
 }
 
-// Bootstrap when run directly.
-if (import.meta.url === 'file://' + process.argv[1]) {
+// Bootstrap when run directly. argv[1] may be a symlink (npx/.bin/rest-magpie),
+// so resolve to the real file before comparing with import.meta.url.
+const isMain = (() => {
+    const argv1 = process.argv[1]
+    if (!argv1) return false
+    try {
+        return import.meta.url === pathToFileURL(realpathSync(argv1)).href
+    } catch {
+        return false
+    }
+})()
+if (isMain) {
     const { server } = createServer()
     const transport = new StdioServerTransport()
     server.connect(transport).catch((e) => {
