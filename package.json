@@ -1,0 +1,40 @@
+{
+    "name": "rest-magpie",
+    "version": "0.0.0",
+    "description": "REST that picks only the shiny bits — MCP server with schema-first responses and jq filtering.",
+    "keywords": ["mcp", "model-context-protocol", "rest", "http", "fetch", "jq", "json", "claude"],
+    "license": "MIT",
+    "author": "smartass",
+    "homepage": "https://github.com/ed-smartass/rest-magpie",
+    "repository": { "type": "git", "url": "https://github.com/ed-smartass/rest-magpie.git" },
+    "bugs": "https://github.com/ed-smartass/rest-magpie/issues",
+    "type": "module",
+    "main": "dist/index.js",
+    "bin": { "rest-magpie": "dist/index.js" },
+    "files": ["dist", "README.md", "LICENSE"],
+    "engines": { "node": ">=20" },
+    "scripts": {
+        "build": "tsup",
+        "dev": "tsup --watch",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "lint": "biome check .",
+        "format": "biome format --write .",
+        "typecheck": "tsc --noEmit",
+        "prepublishOnly": "npm run build"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.0.0",
+        "undici": "^7.0.0",
+        "jq-wasm": "^1.0.0",
+        "genson-js": "^0.0.8"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "^1.9.0",
+        "@types/node": "^22.10.0",
+        "msw": "^2.7.0",
+        "tsup": "^8.3.0",
+        "typescript": "^5.7.0",
+        "vitest": "^2.1.0"
+    }
+}

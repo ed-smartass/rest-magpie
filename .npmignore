@@ -1,0 +1,11 @@
+test/
+src/
+docker/
+.github/
+.gitignore
+biome.json
+tsconfig.json
+tsup.config.ts
+vitest.config.ts
+*.md
+!README.md
