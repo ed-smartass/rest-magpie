@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+.DS_Store
+*.log
+.env
+.env.local
+
+# Build-time AI agent artifacts (kept local during development)
+AGENTS.md
+docs/plans/
