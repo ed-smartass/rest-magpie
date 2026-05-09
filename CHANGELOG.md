@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1 — 2026-05-10
+
+### Fixed
+- Server failed to start when launched through a symlink (npx, `npm install -g`, or any package-manager bin shim). The entrypoint guard compared `import.meta.url` to a literal `file://` + `process.argv[1]`, which differed from the resolved real path under a symlink, so the bootstrap branch was skipped and the process exited silently with code 0. Now resolves `argv[1]` via `realpathSync` + `pathToFileURL` before comparing.
+
 ## 0.1.0 — 2026-05-09
 
 Initial release.

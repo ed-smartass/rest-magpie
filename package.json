@@ -1,6 +1,6 @@
 {
     "name": "rest-magpie",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "REST that picks only the shiny bits — MCP server with schema-first responses and jq filtering.",
     "keywords": ["mcp", "model-context-protocol", "rest", "http", "fetch", "jq", "json", "claude"],
     "license": "MIT",
