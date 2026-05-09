@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
@@ -106,5 +109,33 @@ describe('performHttp body input', () => {
                 {},
             ),
         ).rejects.toThrow(/invalid_input/)
+    })
+})
+
+describe('performHttp multipart', () => {
+    it('sends multipart body', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'magpie-http-'))
+        const p = join(dir, 'x.txt')
+        writeFileSync(p, 'abc', 'utf8')
+        let receivedCt: string | null = null
+        let receivedBytes = 0
+        server.use(
+            http.post('https://api.test/upload', async ({ request }) => {
+                receivedCt = request.headers.get('content-type')
+                const buf = Buffer.from(await request.arrayBuffer())
+                receivedBytes = buf.length
+                return HttpResponse.json({ ok: true })
+            }),
+        )
+        await performHttp(
+            {
+                method: 'POST',
+                url: 'https://api.test/upload',
+                multipart: { fields: { who: 'alice' }, files: { f: { path: p } } },
+            },
+            {},
+        )
+        expect(receivedCt).toContain('multipart/form-data; boundary=')
+        expect(receivedBytes).toBeGreaterThan(20)
     })
 })

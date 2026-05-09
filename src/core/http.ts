@@ -2,6 +2,7 @@ import type { Dispatcher } from 'undici'
 import { getConfig } from '../config.js'
 import type { BodyKind, HttpRequestParams } from '../types.js'
 import { classifyContentType, parseCharset } from './content_type.js'
+import { buildMultipart } from './multipart.js'
 
 export interface HttpRunResult {
     status: number
@@ -136,6 +137,9 @@ const resolveBody = (p: HttpRequestParams): ResolvedBody => {
     if (p.body_raw !== undefined) {
         return { body: p.body_raw, contentType: undefined }
     }
-    // multipart in Task 15
+    if (p.multipart !== undefined) {
+        const built = buildMultipart(p.multipart)
+        return { body: built.body, contentType: built.contentType }
+    }
     return { body: undefined }
 }
