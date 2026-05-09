@@ -386,6 +386,9 @@ All env vars are optional with sensible defaults.
 | `MAGPIE_SCHEMA_MAX_DEPTH` | 10 | recursion depth for schema renderers |
 | `MAGPIE_SCHEMA_MAX_OBJECT_KEYS` | 200 | per-object key cap |
 | `MAGPIE_SCHEMA_SAMPLE_MAX_STRING` | 100 | string truncation in samples |
+| `MAGPIE_FILES_ROOT` | (unset) | when set, every server-side file path (`multipart.files[].path`, `download_to`, `save_to`) must canonicalize to a location under this prefix; otherwise the call fails with `error.kind = "invalid_input"`. Unset = no constraint (current behavior for npm-mode users). |
+
+When `MAGPIE_FILES_ROOT` is set, the server also appends a one-line note to `http_request` and `http_read` tool descriptions (e.g. *"Server-side file paths must reside under `/data`."*) so LLM clients see the constraint at call-authoring time.
 
 ## 11. Repository layout
 
@@ -470,8 +473,11 @@ Both modes communicate with Claude over **stdio**. Same `dist/index.js` undernea
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
-        "-v", "/host/uploads:/uploads:ro",
-        "-e", "MAGPIE_TLS_INSECURE=0",
+        // Same-path bind mount: the host directory and the in-container
+        // path are identical, so the agent's absolute paths "just work"
+        // without any host↔container translation logic.
+        "-v", "/home/me/data:/home/me/data",
+        "-e", "MAGPIE_FILES_ROOT=/home/me/data",
         "ghcr.io/<user>/rest-magpie:latest"
       ]
     }
@@ -479,7 +485,13 @@ Both modes communicate with Claude over **stdio**. Same `dist/index.js` undernea
 }
 ```
 
-Volume mounts are required for `multipart.files[].path` and `download_to` to reference real host files. Document this clearly.
+**Path mapping convention.** Volume mounts are required for `multipart.files[].path`, `download_to`, and `save_to` to reference real host files. The recommended pattern is a *same-path bind mount* (`-v /host/X:/host/X`) paired with `-e MAGPIE_FILES_ROOT=/host/X`. With both set:
+
+- The agent passes ordinary host paths under `/host/X/...`; they resolve identically inside the container — no path translation needed.
+- `MAGPIE_FILES_ROOT` makes the constraint visible (it's appended to relevant tool descriptions) and enforces it (any path outside the root → `invalid_input` with a clear message).
+- Path canonicalization rejects traversal escapes (`/host/X/../../etc/passwd` resolves to `/etc/passwd`, fails the check).
+
+When `MAGPIE_FILES_ROOT` is unset, no constraint is applied — useful for `npx`-mode usage where the server's filesystem is the host's. In Docker without the env, the agent must guess host↔container path mapping itself, which it usually gets wrong; setting the env is the documented happy-path.
 
 Image: multistage `node:20-alpine` → final `node:20-alpine` with only `dist/` and `package.json`. Should land under 100MB.
 
