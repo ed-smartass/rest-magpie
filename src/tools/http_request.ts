@@ -98,16 +98,52 @@ export const httpRequestTool = async (
     const requestedMode: BodyMode = params.body_mode ?? 'auto'
     const resolution = resolveBodyMode(requestedMode, runResult.body_kind, runResult.bodyBytes)
 
-    // Cache the entry BEFORE branching on the resolution result. The
-    // `body_too_large_for_inline` error tells the agent to recover via
-    // `http_read` with the surfaced `cache_id`, so the entry must be
-    // present in the cache at the moment that error is returned.
-    const resolvedForMeta: ResolvedBodyMode = resolution.ok ? resolution.resolved_mode : 'schema'
-    const reasonForMeta: string | undefined = resolution.ok
-        ? resolution.reason
-        : 'body cached; inline cap exceeded — fetch via http_read with cache_id'
+    if (!resolution.ok) {
+        const inner = resolution.error.error
+        // Only `body_too_large_for_inline` advertises a recovery path via
+        // `http_read` with the surfaced `cache_id`, so only that case
+        // populates the cache and splices `cache_id` into the error detail.
+        // Other resolution errors (e.g. `body_mode: 'inline'` on a binary
+        // response) surface as-is, with no spurious cached entry.
+        if (inner.kind === 'body_too_large_for_inline') {
+            const body_inclusion: BodyInclusion = buildInclusion(
+                'schema',
+                'body cached; inline cap exceeded — fetch via http_read with cache_id',
+            )
+            const meta: ResponseMeta = {
+                url: runResult.finalUrl,
+                method: params.method,
+                duration_ms: runResult.durationMs,
+                response_headers: runResult.headers,
+                body_bytes: runResult.bodyBytes,
+                content_type: runResult.contentType,
+                body_kind: runResult.body_kind,
+                body_inclusion,
+                redirect_chain: runResult.redirectChain,
+                download_path: runResult.downloadPath,
+            }
+            cache.put({
+                cache_id,
+                created_at: Date.now(),
+                body_kind: runResult.body_kind,
+                body: runResult.parsedBody,
+                status: runResult.status,
+                meta,
+            })
+            return {
+                error: {
+                    ...inner,
+                    detail: { ...(inner.detail ?? {}), cache_id },
+                },
+            }
+        }
+        return resolution.error
+    }
 
-    const body_inclusion: BodyInclusion = buildInclusion(resolvedForMeta, reasonForMeta)
+    const body_inclusion: BodyInclusion = buildInclusion(
+        resolution.resolved_mode,
+        resolution.reason,
+    )
 
     const meta: ResponseMeta = {
         url: runResult.finalUrl,
@@ -131,16 +167,6 @@ export const httpRequestTool = async (
         meta,
     }
     cache.put(entry)
-
-    if (!resolution.ok) {
-        const inner = resolution.error.error
-        return {
-            error: {
-                ...inner,
-                detail: { ...(inner.detail ?? {}), cache_id },
-            },
-        }
-    }
 
     const cfg = getConfig()
     const result: HttpRequestResult = {

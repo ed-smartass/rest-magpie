@@ -71,7 +71,14 @@ describe('http_request tool', () => {
             cache,
         )
         expect(isError(r)).toBe(true)
-        if (isError(r)) expect(r.error.kind).toBe('invalid_input')
+        if (isError(r)) {
+            expect(r.error.kind).toBe('invalid_input')
+            // Non-cap resolution errors do not advertise a recovery path,
+            // so cache_id must NOT leak into detail and nothing should be
+            // in the cache.
+            expect(r.error.detail?.cache_id).toBeUndefined()
+        }
+        expect(cache.size()).toBe(0)
     })
 
     it('auto on binary resolves to schema and never inlines', async () => {

@@ -140,7 +140,7 @@ http_request({
       head_preview_threshold_bytes: number,         // current MAGPIE_HEAD_PREVIEW_THRESHOLD
       head_preview_items: number,                   // current MAGPIE_HEAD_PREVIEW_ITEMS
       head_preview_string_chars: number,            // current MAGPIE_HEAD_PREVIEW_STRING
-      inline_cap_bytes: number,                     // current MAGPIE_INLINE_BODY_CAP
+      inline_body_cap_bytes: number,                // current MAGPIE_INLINE_BODY_CAP
       reason?: string,                              // populated only when the resolved mode wasn't obvious
     },
     redirect_chain: string[],                // empty if no redirects
