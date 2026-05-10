@@ -12,3 +12,6 @@ coverage/
 # Build-time AI agent artifacts (kept local during development)
 AGENTS.md
 docs/plans/
+
+# image-mcp / Gemini source generation artifacts (use polished banner.png / logo.png instead)
+docs/images/Generated Image*.png
