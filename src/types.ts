@@ -10,7 +10,7 @@ export type SchemaFormat = 'paths' | 'shape' | 'sample' | 'json_schema'
 // Body inclusion mode.
 //   schema   → no body in response (just the rendered schema)
 //   head     → schema + body_preview (truncated arrays/strings)
-//   inline   → schema + body (full body, capped by MAGPIE_INLINE_BODY_CAP)
+//   inline   → schema + body (full body, capped by PEEK_INLINE_BODY_CAP)
 //   auto     → server picks based on byte thresholds (default)
 export type BodyMode = 'auto' | 'schema' | 'head' | 'inline'
 

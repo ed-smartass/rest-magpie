@@ -75,7 +75,7 @@ const decodeBase64 = (s: unknown, where: string, capBytes: number): Buffer => {
                 where +
                 ' encoded size ' +
                 s.length +
-                ' chars implies decoded > MAGPIE_MAX_INLINE_FILE_BYTES (' +
+                ' chars implies decoded > PEEK_MAX_INLINE_FILE_BYTES (' +
                 capBytes +
                 ' B). Use multipart.files[].path with a volume mount instead, or raise the cap.',
         )
@@ -94,7 +94,7 @@ const decodeBase64 = (s: unknown, where: string, capBytes: number): Buffer => {
                 where +
                 ' decoded size ' +
                 buf.length +
-                ' B exceeds MAGPIE_MAX_INLINE_FILE_BYTES (' +
+                ' B exceeds PEEK_MAX_INLINE_FILE_BYTES (' +
                 capBytes +
                 ' B). Use multipart.files[].path with a volume mount instead, or raise the cap.',
         )
@@ -105,7 +105,7 @@ const decodeBase64 = (s: unknown, where: string, capBytes: number): Buffer => {
 }
 
 export const buildMultipart = (mp: MultipartInput): BuiltMultipart => {
-    const boundary = '----magpie' + randomBytes(12).toString('hex')
+    const boundary = '----peek' + randomBytes(12).toString('hex')
     const cfg = getConfig()
 
     // Validate and sanitise every header-position string EAGERLY so a

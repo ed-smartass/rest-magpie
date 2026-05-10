@@ -44,22 +44,22 @@ const pathEnv = (name: string): string | undefined => {
 
 export const loadConfig = (): Config => {
     return {
-        defaultTimeoutMs: intEnv('MAGPIE_DEFAULT_TIMEOUT_MS', 30000),
-        maxResponseBytes: intEnv('MAGPIE_MAX_RESPONSE_BYTES', 50 * 1024 * 1024),
-        cacheTtlSeconds: intEnv('MAGPIE_CACHE_TTL_SECONDS', 600),
-        inlineThresholdBytes: intEnv('MAGPIE_INLINE_THRESHOLD_BYTES', 8192),
-        headPreviewThresholdBytes: intEnv('MAGPIE_HEAD_PREVIEW_THRESHOLD', 64 * 1024),
-        headPreviewItems: intEnv('MAGPIE_HEAD_PREVIEW_ITEMS', 5),
-        headPreviewStringChars: intEnv('MAGPIE_HEAD_PREVIEW_STRING', 200),
-        inlineBodyCapBytes: intEnv('MAGPIE_INLINE_BODY_CAP', 256 * 1024),
-        maxInlineFileBytes: intEnv('MAGPIE_MAX_INLINE_FILE_BYTES', 10 * 1024 * 1024),
-        jqTimeoutMs: intEnv('MAGPIE_JQ_TIMEOUT_MS', 5000),
-        useNativeJq: boolEnv('MAGPIE_USE_NATIVE_JQ', false),
-        tlsInsecure: boolEnv('MAGPIE_TLS_INSECURE', false),
-        schemaMaxDepth: intEnv('MAGPIE_SCHEMA_MAX_DEPTH', 10),
-        schemaMaxObjectKeys: intEnv('MAGPIE_SCHEMA_MAX_OBJECT_KEYS', 200),
-        schemaSampleMaxString: intEnv('MAGPIE_SCHEMA_SAMPLE_MAX_STRING', 100),
-        filesRoot: pathEnv('MAGPIE_FILES_ROOT'),
+        defaultTimeoutMs: intEnv('PEEK_DEFAULT_TIMEOUT_MS', 30000),
+        maxResponseBytes: intEnv('PEEK_MAX_RESPONSE_BYTES', 50 * 1024 * 1024),
+        cacheTtlSeconds: intEnv('PEEK_CACHE_TTL_SECONDS', 600),
+        inlineThresholdBytes: intEnv('PEEK_INLINE_THRESHOLD_BYTES', 8192),
+        headPreviewThresholdBytes: intEnv('PEEK_HEAD_PREVIEW_THRESHOLD', 64 * 1024),
+        headPreviewItems: intEnv('PEEK_HEAD_PREVIEW_ITEMS', 5),
+        headPreviewStringChars: intEnv('PEEK_HEAD_PREVIEW_STRING', 200),
+        inlineBodyCapBytes: intEnv('PEEK_INLINE_BODY_CAP', 256 * 1024),
+        maxInlineFileBytes: intEnv('PEEK_MAX_INLINE_FILE_BYTES', 10 * 1024 * 1024),
+        jqTimeoutMs: intEnv('PEEK_JQ_TIMEOUT_MS', 5000),
+        useNativeJq: boolEnv('PEEK_USE_NATIVE_JQ', false),
+        tlsInsecure: boolEnv('PEEK_TLS_INSECURE', false),
+        schemaMaxDepth: intEnv('PEEK_SCHEMA_MAX_DEPTH', 10),
+        schemaMaxObjectKeys: intEnv('PEEK_SCHEMA_MAX_OBJECT_KEYS', 200),
+        schemaSampleMaxString: intEnv('PEEK_SCHEMA_SAMPLE_MAX_STRING', 100),
+        filesRoot: pathEnv('PEEK_FILES_ROOT'),
     }
 }
 

@@ -12,10 +12,10 @@ import { serverInfoTool } from './tools/server_info.js'
 
 // Replaced by tsup at build time (see tsup.config.ts `define`). Falls back to
 // process.env.npm_package_version when running under npm scripts (tests).
-declare const __MAGPIE_VERSION__: string | undefined
+declare const __PEEK_VERSION__: string | undefined
 const VERSION =
-    typeof __MAGPIE_VERSION__ !== 'undefined'
-        ? __MAGPIE_VERSION__
+    typeof __PEEK_VERSION__ !== 'undefined'
+        ? __PEEK_VERSION__
         : (process.env.npm_package_version ?? '0.0.0-dev')
 
 export const createServer = () => {
@@ -27,7 +27,7 @@ export const createServer = () => {
           '.'
         : ''
     const server = new Server(
-        { name: 'rest-magpie', version: VERSION },
+        { name: 'mcp-peek', version: VERSION },
         { capabilities: { tools: {} } },
     )
 
@@ -86,7 +86,7 @@ const HTTP_REQUEST_DESC =
     'body_mode controls how much of the body comes back inline:\n' +
     '  schema (no body — schema only)\n' +
     '  head   (schema + truncated preview of arrays/strings — middle ground)\n' +
-    '  inline (schema + full body — costly; capped by MAGPIE_INLINE_BODY_CAP)\n' +
+    '  inline (schema + full body — costly; capped by PEEK_INLINE_BODY_CAP)\n' +
     '  auto   (default — server picks based on byte thresholds)\n' +
     'Reach for inline ONLY when body is known-small AND every field is needed; ' +
     'a 200KB JSON inlined is ~12K tokens of context for data you may never use.\n\n' +
@@ -111,8 +111,8 @@ const HTTP_INSPECT_DESC =
     'Try `shape` for nested structures, `sample` to see one realistic record, or `json_schema` for downstream typed pipelines.'
 
 const SERVER_INFO_DESC =
-    'Debug helper. No params. Returns the current rest-magpie version, runtime detection (npx | docker | unknown), ' +
-    'cwd, MAGPIE_FILES_ROOT (or null), and every effective MAGPIE_* env-var value. ' +
+    'Debug helper. No params. Returns the current mcp-peek version, runtime detection (npx | docker | unknown), ' +
+    'cwd, PEEK_FILES_ROOT (or null), and every effective PEEK_* env-var value. ' +
     'Use when a path is rejected unexpectedly, or to confirm which container/host the server is actually running in.'
 
 // JSON Schemas — order of properties matches the spec §4 canonical order.
@@ -218,7 +218,7 @@ const HTTP_INSPECT_SCHEMA = {
     required: ['cache_id', 'schema_format'],
 }
 
-// Bootstrap when run directly. argv[1] may be a symlink (npx/.bin/rest-magpie),
+// Bootstrap when run directly. argv[1] may be a symlink (npx/.bin/mcp-peek),
 // so resolve to the real file before comparing with import.meta.url.
 const isMain = (() => {
     const argv1 = process.argv[1]
@@ -233,7 +233,7 @@ if (isMain) {
     const { server } = createServer()
     const transport = new StdioServerTransport()
     server.connect(transport).catch((e) => {
-        console.error('rest-magpie failed to start:', e)
+        console.error('mcp-peek failed to start:', e)
         process.exit(1)
     })
 }

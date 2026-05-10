@@ -16,9 +16,9 @@ export default defineConfig({
     shims: false,
     banner: { js: '#!/usr/bin/env node' },
     // Inline the version at build time so the published bundle can never
-    // drift from package.json. Source code refers to __MAGPIE_VERSION__;
+    // drift from package.json. Source code refers to __PEEK_VERSION__;
     // tests use process.env.npm_package_version (set by npm).
     define: {
-        __MAGPIE_VERSION__: JSON.stringify(pkg.version),
+        __PEEK_VERSION__: JSON.stringify(pkg.version),
     },
 })

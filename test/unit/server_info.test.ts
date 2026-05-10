@@ -4,7 +4,7 @@ import { serverInfoTool } from '../../src/tools/server_info.js'
 
 describe('serverInfoTool', () => {
     beforeEach(() => {
-        for (const k of Object.keys(process.env).filter((k) => k.startsWith('MAGPIE_'))) {
+        for (const k of Object.keys(process.env).filter((k) => k.startsWith('PEEK_'))) {
             Reflect.deleteProperty(process.env, k)
         }
         resetConfigCache()
@@ -22,17 +22,17 @@ describe('serverInfoTool', () => {
         expect(r.effective_limits.inline_body_cap_bytes).toBe(256 * 1024)
     })
 
-    it('reflects MAGPIE_FILES_ROOT when set', () => {
-        process.env.MAGPIE_FILES_ROOT = '/tmp/data'
+    it('reflects PEEK_FILES_ROOT when set', () => {
+        process.env.PEEK_FILES_ROOT = '/tmp/data'
         resetConfigCache()
         const r = serverInfoTool('1.0.0')
         expect(r.files_root).toBe('/tmp/data')
     })
 
     it('reflects custom env-var values in effective_limits', () => {
-        process.env.MAGPIE_INLINE_THRESHOLD_BYTES = '1024'
-        process.env.MAGPIE_INLINE_BODY_CAP = '4096'
-        process.env.MAGPIE_HEAD_PREVIEW_ITEMS = '10'
+        process.env.PEEK_INLINE_THRESHOLD_BYTES = '1024'
+        process.env.PEEK_INLINE_BODY_CAP = '4096'
+        process.env.PEEK_HEAD_PREVIEW_ITEMS = '10'
         resetConfigCache()
         const r = serverInfoTool('1.0.0')
         expect(r.effective_limits.inline_threshold_bytes).toBe(1024)

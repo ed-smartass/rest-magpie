@@ -54,7 +54,7 @@ describe('isUnderRoot', () => {
         // Set up: <root>/escape -> <outside>. Then candidate = <root>/escape/new.txt
         // which doesn't yet exist. The lexical-fallback canonicalize would have
         // accepted it (string starts with root), letting a write land outside.
-        const tmp = mkdtempSync(join(tmpdir(), 'magpie-paths-'))
+        const tmp = mkdtempSync(join(tmpdir(), 'peek-paths-'))
         const root = join(tmp, 'root')
         const outside = join(tmp, 'outside')
         mkdirSync(root)
@@ -67,7 +67,7 @@ describe('isUnderRoot', () => {
     it('accepts non-existent path inside genuinely-under-root parent', () => {
         // Counterpart sanity check: the new logic must still allow legitimate
         // download_to / save_to targets that don't yet exist.
-        const tmp = mkdtempSync(join(tmpdir(), 'magpie-paths-'))
+        const tmp = mkdtempSync(join(tmpdir(), 'peek-paths-'))
         const root = join(tmp, 'root')
         mkdirSync(root)
         mkdirSync(join(root, 'sub'))

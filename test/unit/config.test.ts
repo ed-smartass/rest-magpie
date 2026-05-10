@@ -4,7 +4,7 @@ import { loadConfig } from '../../src/config.js'
 describe('config', () => {
     const original = { ...process.env }
     beforeEach(() => {
-        for (const k of Object.keys(process.env).filter((k) => k.startsWith('MAGPIE_'))) {
+        for (const k of Object.keys(process.env).filter((k) => k.startsWith('PEEK_'))) {
             delete process.env[k]
         }
     })
@@ -32,30 +32,30 @@ describe('config', () => {
         expect(c.filesRoot).toBeUndefined()
     })
 
-    it('captures MAGPIE_FILES_ROOT as an absolute resolved path', () => {
-        process.env.MAGPIE_FILES_ROOT = '/data/uploads/'
+    it('captures PEEK_FILES_ROOT as an absolute resolved path', () => {
+        process.env.PEEK_FILES_ROOT = '/data/uploads/'
         expect(loadConfig().filesRoot).toBe('/data/uploads')
     })
 
-    it('treats empty MAGPIE_FILES_ROOT as unset', () => {
-        process.env.MAGPIE_FILES_ROOT = ''
+    it('treats empty PEEK_FILES_ROOT as unset', () => {
+        process.env.PEEK_FILES_ROOT = ''
         expect(loadConfig().filesRoot).toBeUndefined()
     })
 
-    it('trims whitespace before resolving MAGPIE_FILES_ROOT', () => {
-        process.env.MAGPIE_FILES_ROOT = '  /data/uploads  '
+    it('trims whitespace before resolving PEEK_FILES_ROOT', () => {
+        process.env.PEEK_FILES_ROOT = '  /data/uploads  '
         expect(loadConfig().filesRoot).toBe('/data/uploads')
     })
 
-    it('treats whitespace-only MAGPIE_FILES_ROOT as unset', () => {
-        process.env.MAGPIE_FILES_ROOT = '   '
+    it('treats whitespace-only PEEK_FILES_ROOT as unset', () => {
+        process.env.PEEK_FILES_ROOT = '   '
         expect(loadConfig().filesRoot).toBeUndefined()
     })
 
     it('respects integer env vars', () => {
-        process.env.MAGPIE_DEFAULT_TIMEOUT_MS = '5000'
-        process.env.MAGPIE_INLINE_THRESHOLD_BYTES = '1024'
-        process.env.MAGPIE_INLINE_BODY_CAP = '4096'
+        process.env.PEEK_DEFAULT_TIMEOUT_MS = '5000'
+        process.env.PEEK_INLINE_THRESHOLD_BYTES = '1024'
+        process.env.PEEK_INLINE_BODY_CAP = '4096'
         const c = loadConfig()
         expect(c.defaultTimeoutMs).toBe(5000)
         expect(c.inlineThresholdBytes).toBe(1024)
@@ -64,15 +64,15 @@ describe('config', () => {
 
     it('respects boolean env vars (1/true/yes/on)', () => {
         for (const v of ['1', 'true', 'yes', 'on']) {
-            process.env.MAGPIE_TLS_INSECURE = v
+            process.env.PEEK_TLS_INSECURE = v
             expect(loadConfig().tlsInsecure).toBe(true)
         }
-        process.env.MAGPIE_TLS_INSECURE = '0'
+        process.env.PEEK_TLS_INSECURE = '0'
         expect(loadConfig().tlsInsecure).toBe(false)
     })
 
     it('falls back to default for malformed integer', () => {
-        process.env.MAGPIE_DEFAULT_TIMEOUT_MS = 'not-a-number'
+        process.env.PEEK_DEFAULT_TIMEOUT_MS = 'not-a-number'
         expect(loadConfig().defaultTimeoutMs).toBe(30000)
     })
 })

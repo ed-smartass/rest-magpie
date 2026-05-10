@@ -31,7 +31,7 @@ const detectRuntime = (): 'npx' | 'docker' | 'unknown' => {
     // the bin shim; treat both as "npx" for server_info purposes since the
     // distinction doesn't change anything an agent would care about.
     const argv1 = process.argv[1] ?? ''
-    if (argv1.includes('rest-magpie') || argv1.includes('npm')) return 'npx'
+    if (argv1.includes('mcp-peek') || argv1.includes('npm')) return 'npx'
     return 'unknown'
 }
 
