@@ -155,7 +155,7 @@ One MCP install replaces every `curl` your agent would run, so you authorize onc
 
 ## Built for the agent
 
-mcp-peek is shaped around how an agent actually reads an API, not how a human runs `curl`. Three structural choices follow from that:
+mcp-peek is shaped around how an agent actually reads an API, not how a human runs `curl`. Four structural choices follow from that:
 
 - **Schema-first responses.** `http_request` returns the shape of the body, not the body itself. The agent learns *what's in there* without burning tokens on bytes it will throw away.
 - **`next_step_hints` on every response.** JSON responses come back with advisory jq masks inferred from the top-level shape — the agent has a starting point instead of guessing field paths.

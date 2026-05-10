@@ -112,7 +112,8 @@ const HTTP_INSPECT_DESC =
 
 const SERVER_INFO_DESC =
     'Debug helper. No params. Returns the current mcp-peek version, runtime detection (npx | docker | unknown), ' +
-    'cwd, PEEK_FILES_ROOT (or null), and every effective PEEK_* env-var value. ' +
+    'cwd, files_root (PEEK_FILES_ROOT, or null when unset), and an effective_limits object summarising every ' +
+    'configured cap / threshold / timeout (15 fields — see README for the full list). ' +
     'Use when a path is rejected unexpectedly, or to confirm which container/host the server is actually running in.'
 
 // JSON Schemas — order of properties matches the spec §4 canonical order.
