@@ -3,27 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>rest-magpie — REST that picks only the shiny bits</title>
+<title>mcp-peek — Peek the schema, slice the body</title>
+<meta name="description" content="mcp-peek — schema-first MCP wrapper for arbitrary HTTP. Peek the schema, slice the body. ~50× less context, structured errors, next_step_hints.">
+<meta property="og:title" content="mcp-peek — Peek the schema, slice the body">
+<meta property="og:description" content="Schema-first MCP wrapper for arbitrary HTTP. ~50× less context, next_step_hints, structured error envelopes.">
+<link rel="icon" type="image/png" href="docs/images/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --navy: #0a1828;
-    --navy-2: #0e2236;
-    --navy-3: #142e47;
-    --teal: #1a4a5e;
-    --cream: #f5e8d0;
-    --cream-2: #ede0c6;
-    --paper: #faf5ea;
-    --gold: #d4a84b;
-    --gold-bright: #e3bc63;
-    --gold-deep: #b08838;
-    --warn: #c25a4a;
-    --ink: #0a1828;
+    --navy: #0E1726;
+    --navy-2: #142036;
+    --navy-3: #1a2a44;
+    --teal: #0d3a4a;
+    --cream: #dfe8f0;       /* cool off-white text on dark */
+    --cream-2: #c8d4de;
+    --paper: #f3f5f8;       /* cool light bg */
+    --gold: #2dd4bf;        /* mapped to cyan-dim */
+    --gold-bright: #5EEAD4; /* mapped to signal-cyan */
+    --gold-deep: #0d9488;   /* deep teal */
+    --amber: #F59E0B;       /* warm point-accent */
+    --amber-bright: #fbbf24;
+    --warn: #ef4444;
+    --ink: #0E1726;
     --ink-mute: #4a5a6e;
-    --line: rgba(10,24,40,0.10);
-    --line-on-dark: rgba(245,232,208,0.12);
+    --line: rgba(14,23,38,0.10);
+    --line-on-dark: rgba(223,232,240,0.12);
   }
 
   *, *::before, *::after { box-sizing: border-box; }
@@ -106,23 +112,25 @@
   .hero-bg {
     position: absolute; inset: 0;
     background:
-      linear-gradient(95deg, var(--navy) 0%, var(--navy-2) 24%, var(--teal) 58%, #c9b78c 82%, var(--cream) 100%);
+      radial-gradient(900px 600px at 30% 30%, rgba(94,234,212,0.12), transparent 60%),
+      radial-gradient(700px 500px at 80% 70%, rgba(245,158,11,0.08), transparent 60%),
+      linear-gradient(180deg, var(--navy) 0%, #080f1c 100%);
     z-index: -2;
   }
   .hero-banner {
     position: absolute; inset: 0;
-    background-image: url("images/banner.png");
+    background-image: url("docs/images/banner.png");
     background-size: cover;
     background-position: center;
     z-index: -1;
-    opacity: .95;
-    mix-blend-mode: normal;
+    opacity: 0.55;
+    mix-blend-mode: screen;
   }
-  /* dim the cream side so headline reads */
+  /* vignette so headline reads */
   .hero-bg-shade {
     position: absolute; inset: 0;
     background:
-      linear-gradient(90deg, rgba(10,24,40,0.0) 0%, rgba(10,24,40,0.0) 38%, rgba(10,24,40,0.45) 62%, rgba(10,24,40,0.85) 100%);
+      linear-gradient(180deg, rgba(14,23,38,0.5) 0%, rgba(14,23,38,0.2) 40%, rgba(14,23,38,0.85) 100%);
     z-index: -1;
   }
   .hero-grid {
@@ -168,7 +176,7 @@
   }
   h1.hero-title .pick { color: var(--gold-bright); font-style: italic; font-weight: 600; }
   h1.hero-title .shiny {
-    background: linear-gradient(90deg, var(--gold-bright), #f0d68a, var(--gold));
+    background: linear-gradient(90deg, #7ef3df, var(--gold-bright), #2dd4bf);
     -webkit-background-clip: text; background-clip: text;
     -webkit-text-fill-color: transparent;
   }
@@ -836,6 +844,31 @@
     text-align: right; padding-right: 16px; user-select: none;
   }
 
+  /* runtime toggle (npm ↔ docker) */
+  .runtime-toggle {
+    display: inline-flex;
+    margin: 0 12px 0 auto;
+    border: 1px solid rgba(245,232,208,0.14);
+    background: rgba(0,0,0,0.25);
+    overflow: hidden;
+  }
+  .runtime-btn {
+    background: none;
+    border: none;
+    color: rgba(245,232,208,0.55);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11.5px;
+    padding: 5px 12px;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: all .12s ease;
+  }
+  .runtime-btn:hover { color: var(--cream); }
+  .runtime-btn[aria-selected="true"] {
+    background: rgba(94,234,212,0.18);
+    color: var(--gold-bright);
+  }
+
   /* status footer inside shell */
   .install-status {
     grid-column: 1 / -1;
@@ -994,12 +1027,107 @@
     .schema-side h3 { font-size: 22px; }
   }
 
+  /* ---------- AGENT (Built for the agent) ---------- */
+  .agent { background: var(--paper); border-bottom: 1px solid var(--line); }
+  .agent-head { max-width: 760px; margin: 0 0 56px; }
+  .agent-head .mono.cyan { color: var(--gold-deep); }
+  .agent-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .agent-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    padding: 32px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .agent-card::before {
+    content: ""; position: absolute; inset: 0 auto 0 0; width: 3px;
+    background: linear-gradient(180deg, var(--gold-bright), var(--gold-deep));
+  }
+  .agent-num {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--gold-deep);
+  }
+  .agent-card h3 {
+    margin: 0;
+    font-size: 22px;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .agent-card h3 .mono { color: var(--gold-deep); font-weight: 500; }
+  .agent-card p {
+    margin: 0;
+    color: var(--ink-mute);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .agent-card p .mono { color: var(--ink); background: rgba(94,234,212,0.12); padding: 1px 6px; border-radius: 3px; font-size: 13px; }
+  .agent-card p em { font-style: italic; color: var(--ink); }
+
+  .agent-outcomes {
+    margin-top: 36px;
+    padding: 36px 40px;
+    background: var(--navy);
+    color: var(--cream);
+    text-align: center;
+  }
+  .outcome-eyebrow {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    color: var(--gold-bright);
+    letter-spacing: 0.12em;
+    margin-bottom: 24px;
+  }
+  .outcomes {
+    list-style: none;
+    margin: 0; padding: 0;
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    justify-content: center;
+    counter-reset: oc;
+  }
+  .outcomes li {
+    font-size: 15px;
+    color: rgba(223,232,240,0.85);
+    line-height: 1.55;
+    flex: 1 1 220px;
+    max-width: 280px;
+    position: relative;
+    padding-top: 22px;
+    text-align: center;
+  }
+  .outcomes li::before {
+    counter-increment: oc;
+    content: counter(oc, decimal-leading-zero);
+    position: absolute; left: 50%; top: 0; transform: translateX(-50%);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: var(--gold-bright);
+    letter-spacing: 0.08em;
+  }
+  .outcomes li b { color: var(--gold-bright); font-weight: 500; }
+
+  @media (max-width: 880px) {
+    .agent-grid { grid-template-columns: 1fr; }
+    .outcomes { flex-direction: column; gap: 18px; align-items: center; }
+  }
+
   /* tiny mascot */
   .mascot {
     display: block;
     margin: 0 auto 12px;
     width: 56px; height: 56px;
-    background: url("images/logo.png") center / contain no-repeat;
+    background: url("docs/images/logo.png") center / contain no-repeat;
     opacity: 0.85;
     filter: drop-shadow(0 4px 12px rgba(10,24,40,0.15));
   }
@@ -1016,20 +1144,22 @@
 <nav class="nav" id="nav">
   <a href="#top" class="nav-brand" style="text-decoration:none;">
     <span class="logo">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d4a84b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 17 L8 8 L13 14 L21 5"/>
-        <circle cx="8" cy="8" r="1.6" fill="#d4a84b" stroke="none"/>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5EEAD4" stroke-width="1.8" stroke-linecap="round">
+        <circle cx="12" cy="12" r="8"/>
+        <circle cx="12" cy="12" r="4"/>
+        <circle cx="12" cy="12" r="1.5" fill="#F59E0B" stroke="none"/>
       </svg>
     </span>
-    rest-magpie
+    mcp-peek
   </a>
   <div class="nav-links">
     <a href="#pain">The pain</a>
     <a href="#fix">The fix</a>
     <a href="#schemas">Schemas</a>
+    <a href="#agent">For agents</a>
     <a href="#install">Install</a>
   </div>
-  <a class="nav-cta" href="https://github.com/ed-smartass/rest-magpie" target="_blank" rel="noopener">
+  <a class="nav-cta" href="https://github.com/ed-smartass/mcp-peek" target="_blank" rel="noopener">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2c-3.2.7-3.87-1.36-3.87-1.36-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.69 1.25 3.34.96.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.27-5.24-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.15 1.17.91-.25 1.89-.38 2.86-.39.97.01 1.95.13 2.86.39 2.18-1.48 3.14-1.17 3.14-1.17.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.07 0 4.4-2.69 5.36-5.25 5.65.41.35.78 1.05.78 2.12v3.14c0 .31.21.67.8.56C20.22 21.39 23.5 17.07 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
     GitHub
   </a>
@@ -1040,6 +1170,7 @@
 <!-- ============= HERO ============= -->
 <header class="hero">
   <div class="hero-bg"></div>
+  <div class="hero-banner"></div>
   <div class="hero-grid"></div>
   <div class="hero-bg-shade"></div>
 
@@ -1050,13 +1181,13 @@
     </span>
 
     <h1 class="hero-title">
-      REST that picks<br>
-      only the <span class="shiny">shiny bits.</span>
+      Peek the schema,<br>
+      <span class="shiny">slice the body.</span>
     </h1>
 
     <p class="hero-sub">
-      Your agent burned <span class="num">12,400 tokens</span> on a 200&nbsp;KB JSON to read one field.<br>
-      With <strong>rest-magpie</strong>, the same field costs <span class="num">~200 tokens</span>.
+      Your agent burned <span class="num">12,400 tokens</span> on a 200&nbsp;KB JSON to read one field.
+      With <strong>mcp-peek</strong>, the same call costs <span class="num">~200 tokens</span> &mdash; and every response carries <strong>next_step_hints</strong> plus structured error envelopes, so the agent self-corrects instead of guessing.
     </p>
 
     <div class="hero-ctas">
@@ -1064,16 +1195,16 @@
         Install for Claude Desktop
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></svg>
       </a>
-      <a class="btn btn-ghost" href="https://github.com/ed-smartass/rest-magpie" target="_blank" rel="noopener">
+      <a class="btn btn-ghost" href="https://github.com/ed-smartass/mcp-peek" target="_blank" rel="noopener">
         View on GitHub
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg>
       </a>
     </div>
 
     <div class="hero-meta">
-      <span><b>npx -y rest-magpie</b> &nbsp;·&nbsp; one config block</span>
+      <span><b>npx -y mcp-peek</b> &nbsp;·&nbsp; one config block</span>
       <span><b>MIT</b> &nbsp;·&nbsp; ~10ms overhead</span>
-      <span><b>schema-first</b> &nbsp;·&nbsp; jq-filtered</span>
+      <span><b>schema-first</b> &nbsp;·&nbsp; jq-filtered &nbsp;·&nbsp; self-correcting</span>
     </div>
   </div>
 
@@ -1093,7 +1224,7 @@
 
       <!-- LEFT: token blowup -->
       <article class="pain-card fade-in">
-        <h3><span class="marker"></span>Without rest-magpie</h3>
+        <h3><span class="marker"></span>Without mcp-peek</h3>
         <div class="counter-row">
           <span class="counter" data-counter="200847">0</span>
           <span class="counter-unit">bytes</span>
@@ -1208,7 +1339,7 @@
     <div class="compare fade-in">
       <div class="col-h">&nbsp;</div>
       <div class="col-h">Without</div>
-      <div class="col-h with">With rest-magpie</div>
+      <div class="col-h with">With mcp-peek</div>
 
       <div class="label">Tokens to context window</div>
       <div class="num muted">12,400</div>
@@ -1218,6 +1349,10 @@
       <div class="num muted">50</div>
       <div class="num win">1</div>
 
+      <div class="label">Structured errors + <span class="mono">next_step_hints</span></div>
+      <div class="num muted" style="font-size:18px">none</div>
+      <div class="num win" style="font-size:18px">on every response</div>
+
       <div class="label">Latency overhead</div>
       <div class="num">0&nbsp;ms</div>
       <div class="num">~ 10&nbsp;ms</div>
@@ -1226,6 +1361,53 @@
     <p class="fix-foot fade-in">
       Authorize the MCP server <strong>once</strong> at config time. After that, no per-call permission prompts.
     </p>
+  </div>
+</section>
+
+
+<!-- ============= BUILT FOR THE AGENT ============= -->
+<section class="agent" id="agent">
+  <div class="container">
+    <div class="agent-head fade-in">
+      <div class="section-eyebrow">§ 02b &middot; Built for the agent</div>
+      <h2 class="section-title">Built for how an agent reads an API — not how a human runs <span class="mono cyan">curl</span>.</h2>
+      <p class="section-lede">Four structural choices. The hero numbers all fall out of these.</p>
+    </div>
+
+    <div class="agent-grid">
+      <article class="agent-card fade-in">
+        <div class="agent-num">01</div>
+        <h3>Schema-first responses.</h3>
+        <p><span class="mono">http_request</span> returns the <em>shape</em> of the response, not the response itself. The agent learns what's inside without burning tokens on bytes it'll discard anyway.</p>
+      </article>
+
+      <article class="agent-card fade-in">
+        <div class="agent-num">02</div>
+        <h3><span class="mono">next_step_hints</span> on every reply.</h3>
+        <p>JSON responses come back with advisory jq masks derived from the top-level shape. The agent has a starting point instead of guessing paths.</p>
+      </article>
+
+      <article class="agent-card fade-in">
+        <div class="agent-num">03</div>
+        <h3>Structured error envelopes.</h3>
+        <p>Every error is a typed <span class="mono">error.kind</span> with a <span class="mono">message</span> and <span class="mono">detail.hint</span>. The agent branches programmatically by cause and acts on the hint, instead of parsing a stack trace.</p>
+      </article>
+
+      <article class="agent-card fade-in">
+        <div class="agent-num">04</div>
+        <h3>Re-read via <span class="mono">cache_id</span>.</h3>
+        <p>Ask for the same body in a different schema format, or pull a different slice — without a second HTTP call. The body sits in the cache, not in context.</p>
+      </article>
+    </div>
+
+    <div class="agent-outcomes fade-in">
+      <div class="outcome-eyebrow">→ Out of which:</div>
+      <ol class="outcomes">
+        <li><b>~50&times;</b> less context on real-world payloads.</li>
+        <li><b>One</b> permission grant at install time — not per call.</li>
+        <li><b>Self-correcting</b> agent loop. Typed errors and hints keep the agent off the guess-spiral.</li>
+      </ol>
+    </div>
   </div>
 </section>
 
@@ -1279,7 +1461,7 @@
       <div class="lhs">
         <div class="section-eyebrow on-dark">§ 04 &middot; Install</div>
         <h2 class="section-title">Drop one block. <span class="gold">You're done.</span></h2>
-        <p>One config object, one MCP authorization. Pick your client on the left — <span class="mono">npx -y rest-magpie</span> is the same everywhere; only the surrounding schema differs.</p>
+        <p>One config object, one MCP authorization. Pick your client on the left — <span class="mono">npx -y mcp-peek</span> is the same everywhere; only the surrounding schema differs.</p>
       </div>
       <div class="step-pill">→ paste · save · restart</div>
     </div>
@@ -1288,7 +1470,7 @@
       <!-- IDE chrome -->
       <div class="install-chrome">
         <span class="dots"><span></span><span></span><span></span></span>
-        <span class="breadcrumb">~/<b>rest-magpie</b>/install</span>
+        <span class="breadcrumb">~/<b>mcp-peek</b>/install</span>
         <span class="right">
           <span>mcp · stdio</span>
         </span>
@@ -1317,18 +1499,16 @@
             <span class="icon">WS</span><span>Windsurf</span><span class="meta">json</span>
           </button>
         </div>
-        <div class="group-label" style="margin-top: 14px;"><span class="chev">▾</span> container</div>
-        <div class="install-tabs">
-          <button class="install-tab" role="tab" data-client="docker">
-            <span class="icon">DK</span><span>Docker (GHCR)</span><span class="meta">json</span>
-          </button>
-        </div>
       </aside>
 
       <!-- Main panel -->
       <div class="install-main">
         <div class="install-filebar">
           <span class="file-path"><span class="pin">▸</span> <span id="install-filename">claude_desktop_config.json</span></span>
+          <div class="runtime-toggle" role="tablist" aria-label="Runtime">
+            <button class="runtime-btn" role="tab" data-runtime="npm" aria-selected="true">npm</button>
+            <button class="runtime-btn" role="tab" data-runtime="docker" aria-selected="false">Docker</button>
+          </div>
           <button class="copy-btn" id="copy-config">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             <span>Copy</span>
@@ -1351,11 +1531,11 @@
     <div class="install-quick fade-in">
       <div class="quick">
         <div class="quick-head"><span>npm</span><span class="tag">recommended</span></div>
-        <code><span class="prompt">$</span>npx -y <span class="arg">rest-magpie</span></code>
+        <code><span class="prompt">$</span>npx -y <span class="arg">mcp-peek</span></code>
       </div>
       <div class="quick">
         <div class="quick-head"><span>docker</span><span class="tag">ghcr</span></div>
-        <code><span class="prompt">$</span>docker run -i --rm <span class="arg">ghcr.io/ed-smartass/rest-magpie</span></code>
+        <code><span class="prompt">$</span>docker run -i --rm <span class="arg">ghcr.io/ed-smartass/mcp-peek</span></code>
       </div>
     </div>
 
@@ -1373,32 +1553,33 @@
     <div class="footer-brand">
       <div class="logo-row">
         <span class="mark">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d4a84b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 17 L8 8 L13 14 L21 5"/>
-            <circle cx="8" cy="8" r="1.6" fill="#d4a84b" stroke="none"/>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5EEAD4" stroke-width="1.8" stroke-linecap="round">
+            <circle cx="12" cy="12" r="8"/>
+            <circle cx="12" cy="12" r="4"/>
+            <circle cx="12" cy="12" r="1.5" fill="#F59E0B" stroke="none"/>
           </svg>
         </span>
-        <h4>rest-magpie</h4>
+        <h4>mcp-peek</h4>
       </div>
-      <p class="footer-tag">REST that picks only the shiny bits — schema-first MCP wrapper for arbitrary HTTP, with jq-filtered reads.</p>
+      <p class="footer-tag">Peek the schema, slice the body — schema-first MCP wrapper for arbitrary HTTP, with jq-filtered reads, structured errors, and next_step_hints.</p>
       <div class="footer-badges">
-        <a class="badge-pill mit" href="https://github.com/ed-smartass/rest-magpie/blob/main/LICENSE" target="_blank" rel="noopener"><span class="dot"></span>MIT License</a>
-        <a class="badge-pill" href="https://github.com/ed-smartass/rest-magpie" target="_blank" rel="noopener"><span class="dot"></span><span id="stars-count">★ GitHub</span></a>
+        <a class="badge-pill mit" href="https://github.com/ed-smartass/mcp-peek/blob/main/LICENSE" target="_blank" rel="noopener"><span class="dot"></span>MIT License</a>
+        <a class="badge-pill" href="https://github.com/ed-smartass/mcp-peek" target="_blank" rel="noopener"><span class="dot"></span><span id="stars-count">★ GitHub</span></a>
       </div>
     </div>
 
     <div class="footer-col">
       <h5>Project</h5>
-      <a href="https://github.com/ed-smartass/rest-magpie/blob/main/docs/specs/2026-05-09-rest-magpie-design.md" target="_blank" rel="noopener">Design spec</a>
-      <a href="https://github.com/ed-smartass/rest-magpie/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a>
-      <a href="https://github.com/ed-smartass/rest-magpie/issues" target="_blank" rel="noopener">Issues</a>
-      <a href="https://github.com/ed-smartass/rest-magpie/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+      <a href="https://github.com/ed-smartass/mcp-peek/blob/main/docs/specs/2026-05-09-mcp-peek-design.md" target="_blank" rel="noopener">Design spec</a>
+      <a href="https://github.com/ed-smartass/mcp-peek/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a>
+      <a href="https://github.com/ed-smartass/mcp-peek/issues" target="_blank" rel="noopener">Issues</a>
+      <a href="https://github.com/ed-smartass/mcp-peek/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
     </div>
 
     <div class="footer-col">
       <h5>Made by</h5>
       <a href="https://github.com/ed-smartass" target="_blank" rel="noopener">@ed-smartass on GitHub</a>
-      <a href="https://www.npmjs.com/package/rest-magpie" target="_blank" rel="noopener">rest-magpie on npm</a>
+      <a href="https://www.npmjs.com/package/mcp-peek" target="_blank" rel="noopener">mcp-peek on npm</a>
       <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">Model Context Protocol</a>
     </div>
   </div>
@@ -1610,59 +1791,69 @@
   const s = (s) => `<span class="s">${s}</span>`;
   const c = (s) => `<span class="c">${s}</span>`;
 
-  const baseServer = `      ${k('"command"')}: ${s('"npx"')},
-      ${k('"args"')}: [${s('"-y"')}, ${s('"rest-magpie"')}]`;
+  const baseServer = (rt) => {
+    if (rt === 'docker') {
+      return `      ${k('"command"')}: ${s('"docker"')},
+      ${k('"args"')}: [
+        ${s('"run"')}, ${s('"-i"')}, ${s('"--rm"')},
+        ${c('// agent paths under /home/me/data translate transparently')}
+        ${s('"-v"')}, ${s('"/home/me/data:/home/me/data"')},
+        ${s('"-e"')}, ${s('"PEEK_FILES_ROOT=/home/me/data"')},
+        ${s('"ghcr.io/ed-smartass/mcp-peek:latest"')}
+      ]`;
+    }
+    return `      ${k('"command"')}: ${s('"npx"')},
+      ${k('"args"')}: [${s('"-y"')}, ${s('"mcp-peek"')}]`;
+  };
 
   const CONFIGS = {
     'claude-desktop': {
       file: '~/Library/Application Support/Claude/claude_desktop_config.json',
-      code: `{
+      build: (rt) => `{
   ${k('"mcpServers"')}: {
-    ${k('"rest-magpie"')}: {
-${baseServer}
+    ${k('"mcp-peek"')}: {
+${baseServer(rt)}
     }
   }
 }`,
     },
     'claude-code': {
-      file: '~/.claude/mcp.json   ' + c('// or: claude mcp add rest-magpie -- npx -y rest-magpie'),
-      code: `{
+      file: '~/.claude/mcp.json   ' + c('// or: claude mcp add mcp-peek -- npx -y mcp-peek'),
+      build: (rt) => `{
   ${k('"mcpServers"')}: {
-    ${k('"rest-magpie"')}: {
-${baseServer}
+    ${k('"mcp-peek"')}: {
+${baseServer(rt)}
     }
   }
 }`,
     },
     'vscode': {
       file: '.vscode/mcp.json',
-      code: `{
+      build: (rt) => `{
   ${k('"servers"')}: {
-    ${k('"rest-magpie"')}: {
+    ${k('"mcp-peek"')}: {
       ${k('"type"')}: ${s('"stdio"')},
-      ${k('"command"')}: ${s('"npx"')},
-      ${k('"args"')}: [${s('"-y"')}, ${s('"rest-magpie"')}]
+${baseServer(rt)}
     }
   }
 }`,
     },
     'cursor': {
       file: '~/.cursor/mcp.json',
-      code: `{
+      build: (rt) => `{
   ${k('"mcpServers"')}: {
-    ${k('"rest-magpie"')}: {
-${baseServer}
+    ${k('"mcp-peek"')}: {
+${baseServer(rt)}
     }
   }
 }`,
     },
     'cline': {
       file: 'cline_mcp_settings.json',
-      code: `{
+      build: (rt) => `{
   ${k('"mcpServers"')}: {
-    ${k('"rest-magpie"')}: {
-      ${k('"command"')}: ${s('"npx"')},
-      ${k('"args"')}: [${s('"-y"')}, ${s('"rest-magpie"')}],
+    ${k('"mcp-peek"')}: {
+${baseServer(rt)},
       ${k('"disabled"')}: false,
       ${k('"autoApprove"')}: []
     }
@@ -1671,27 +1862,10 @@ ${baseServer}
     },
     'windsurf': {
       file: '~/.codeium/windsurf/mcp_config.json',
-      code: `{
+      build: (rt) => `{
   ${k('"mcpServers"')}: {
-    ${k('"rest-magpie"')}: {
-${baseServer}
-    }
-  }
-}`,
-    },
-    'docker': {
-      file: 'claude_desktop_config.json   ' + c('// same-path bind mount + MAGPIE_FILES_ROOT'),
-      code: `{
-  ${k('"mcpServers"')}: {
-    ${k('"rest-magpie"')}: {
-      ${k('"command"')}: ${s('"docker"')},
-      ${k('"args"')}: [
-        ${s('"run"')}, ${s('"-i"')}, ${s('"--rm"')},
-        ${c('// agent paths under /home/me/data translate transparently')}
-        ${s('"-v"')}, ${s('"/home/me/data:/home/me/data"')},
-        ${s('"-e"')}, ${s('"MAGPIE_FILES_ROOT=/home/me/data"')},
-        ${s('"ghcr.io/ed-smartass/rest-magpie:latest"')}
-      ]
+    ${k('"mcp-peek"')}: {
+${baseServer(rt)}
     }
   }
 }`,
@@ -1701,33 +1875,51 @@ ${baseServer}
   const installCode = document.getElementById('install-code');
   const installFile = document.getElementById('install-filename');
   const STORAGE_KEY = 'rm-install-tab';
+  const RT_KEY = 'rm-runtime';
+  let currentClient = 'claude-desktop';
+  let currentRuntime = 'npm';
 
-  const setInstall = (clientKey) => {
-    const cfg = CONFIGS[clientKey];
+  const renderInstall = () => {
+    const cfg = CONFIGS[currentClient];
     if (!cfg) return;
     installFile.innerHTML = cfg.file;
-    installCode.innerHTML = cfg.code;
-    try { localStorage.setItem(STORAGE_KEY, clientKey); } catch (e) {}
+    installCode.innerHTML = cfg.build(currentRuntime);
   };
 
   document.querySelectorAll('.install-sidebar .install-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.install-sidebar .install-tab').forEach(b => b.setAttribute('aria-selected', 'false'));
       btn.setAttribute('aria-selected', 'true');
-      setInstall(btn.dataset.client);
+      currentClient = btn.dataset.client;
+      try { localStorage.setItem(STORAGE_KEY, currentClient); } catch (e) {}
+      renderInstall();
     });
   });
 
-  // restore saved tab
-  let initial = 'claude-desktop';
+  document.querySelectorAll('.runtime-toggle .runtime-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.runtime-toggle .runtime-btn').forEach(b => b.setAttribute('aria-selected', 'false'));
+      btn.setAttribute('aria-selected', 'true');
+      currentRuntime = btn.dataset.runtime;
+      try { localStorage.setItem(RT_KEY, currentRuntime); } catch (e) {}
+      renderInstall();
+    });
+  });
+
+  // restore saved selection
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && CONFIGS[saved]) initial = saved;
+    const sc = localStorage.getItem(STORAGE_KEY);
+    if (sc && CONFIGS[sc]) currentClient = sc;
+    const sr = localStorage.getItem(RT_KEY);
+    if (sr === 'docker' || sr === 'npm') currentRuntime = sr;
   } catch (e) {}
   document.querySelectorAll('.install-sidebar .install-tab').forEach(b => {
-    b.setAttribute('aria-selected', b.dataset.client === initial ? 'true' : 'false');
+    b.setAttribute('aria-selected', b.dataset.client === currentClient ? 'true' : 'false');
   });
-  setInstall(initial);
+  document.querySelectorAll('.runtime-toggle .runtime-btn').forEach(b => {
+    b.setAttribute('aria-selected', b.dataset.runtime === currentRuntime ? 'true' : 'false');
+  });
+  renderInstall();
 
   /* ---------- copy button ---------- */
   const copyBtn = document.getElementById('copy-config');
