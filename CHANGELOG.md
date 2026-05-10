@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.2 — 2026-05-10
+
+External code review pass closing four correctness issues, two spec/doc drifts, and one Windows-portability bug Copilot flagged on the fix-PR itself. No public API changes; all fixes are behaviour-preserving on POSIX, behaviour-tightening on Windows + edge-case responses.
+
+### Fixed
+- **`MAGPIE_FILES_ROOT` bypass via symlinked parent (security).** When a target file didn't yet exist (typical for `download_to` / `save_to`), `canonicalize` fell back to lexical `path.resolve` — meaning `<root>/symlinked-dir/new.txt` could pass `isUnderRoot` while the actual write landed outside `MAGPIE_FILES_ROOT`. `canonicalize` now walks up to the nearest existing ancestor, `realpathSync`s that, and re-attaches the non-existent suffix. Implementation uses `path.dirname` + `path.parse(abs).root` so it works on POSIX, Windows drive roots (`C:\\`), and UNC shares.
+- **307 / 308 redirect on streamed (multipart) body now fails fast.** RFC 7231 says preserve method+body, but a Readable body has been consumed by the first request — replaying it threw "Response body object should not be disturbed or locked" from undici, which surfaced as a generic `network_error`. Now detected explicitly: `invalid_input` with the final URL so the caller can re-issue the request directly.
+- **`next_step_hints` no longer suggests `map({id, name})` for scalar arrays.** For `{ data: [1,2,3] }` the projection is nonsense and produces a jq parse error if the agent runs it. Branches on object-array vs scalar-array; scalars get `unique` instead, and projections use identifier-safe keys actually present on the first object.
+- **`body_mode: "auto"` on empty body now resolves to `inline`** (matches spec §4). Previously returned `schema`. Body is `null` either way; the behaviour change is observable only in `meta.body_inclusion.resolved_mode`.
+- **`http_inspect` now returns `next_step_hints` for JSON bodies** (matches spec §5.6). Previously the spec advertised it but the wire response only carried `schema`.
+- **Binary + `body_mode: "inline"` error message no longer suggests `http_read`.** After v0.2.1's recovery-path narrowing there's no `cache_id` surfaced for that error, so the previous "use download_to or http_read with save_to" was misleading. Now: "use download_to to stream straight to disk, or omit body_mode (defaults to schema for binary)".
+
+### Docs
+- README `server_info` example: version `0.2.0` → `0.2.1`.
+- `CONTRIBUTING.md` CHANGELOG template uses `X.Y.Z — YYYY-MM-DD` placeholder instead of a stale specific version/date.
+
 ## 0.2.1 — 2026-05-10
 
 Post-v0.2 hardening pass closing ten correctness issues from two rounds of Copilot review on the v0.2 PR wave (#22, #25, #26, #29), plus a small wire-level rename for naming consistency (`meta.body_inclusion.inline_cap_bytes` → `inline_body_cap_bytes`) — taken now while there are 0 npm installs to migrate. README also reorganised for promo readiness (per-client install snippets, `body_mode` and `server_info` sections, concrete token-savings table on real APIs).
