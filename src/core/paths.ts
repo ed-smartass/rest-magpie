@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from 'node:fs'
-import { join, resolve, sep } from 'node:path'
+import { basename, dirname, join, parse, resolve, sep } from 'node:path'
 import type { ErrorEnvelope } from '../types.js'
 import { makeError } from './errors.js'
 
@@ -9,27 +9,31 @@ import { makeError } from './errors.js'
 // (non-existent) tail. This closes a security hole where lexical fallback
 // would let `<root>/symlinked-dir/new.txt` escape MAGPIE_FILES_ROOT — the
 // symlink ancestor was never resolved, so `startsWith(root + sep)` lied.
+//
+// Use path.dirname/basename + path.parse(cur).root for the loop bound so the
+// implementation works on POSIX and Windows (incl. UNC and drive roots like
+// `C:\`) — manual `lastIndexOf(sep)` does the wrong thing on `C:\tmp`.
 const canonicalize = (p: string): string => {
     const abs = resolve(p)
     try {
         return realpathSync(abs)
     } catch {
-        // Walk up component by component until something exists.
+        const root = parse(abs).root // '/' on POSIX; 'C:\\' or '\\\\srv\\share\\' on Windows
         const tail: string[] = []
         let cur = abs
         for (;;) {
-            const idx = cur.lastIndexOf(sep)
-            if (idx < 0) return abs // shouldn't happen for an absolute path
-            const last = cur.slice(idx + 1)
-            const parent = idx === 0 ? sep : cur.slice(0, idx)
+            const parent = dirname(cur)
+            tail.unshift(basename(cur))
             try {
                 const realParent = realpathSync(parent)
-                tail.unshift(last)
-                return tail.length > 0 ? join(realParent, ...tail) : realParent
+                return join(realParent, ...tail)
             } catch {
-                tail.unshift(last)
+                if (parent === cur || parent === root) {
+                    // Hit the filesystem root without finding any existing
+                    // ancestor (very unusual). Fall back to the lexical path.
+                    return abs
+                }
                 cur = parent
-                if (cur === sep) return abs // reached root without finding anything
             }
         }
     }
