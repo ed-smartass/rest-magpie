@@ -213,7 +213,7 @@ const resolveBodyMode = (requested: BodyMode, kind: BodyKind, bytes: number): Re
                 ok: false,
                 error: makeError(
                     'invalid_input',
-                    "body_mode: 'inline' is not valid for binary bodies; use download_to or http_read with save_to",
+                    "body_mode: 'inline' is not valid for binary bodies; use download_to to stream straight to disk, or omit body_mode (defaults to schema for binary)",
                     { body_kind: kind, body_mode: requested },
                 ),
             }
@@ -221,12 +221,10 @@ const resolveBodyMode = (requested: BodyMode, kind: BodyKind, bytes: number): Re
         return { ok: true, resolved_mode: 'schema' }
     }
 
-    // Empty: schema by default (consistent with v0.1.x); explicit modes are
-    // honoured but the body is null either way.
+    // Empty body: per spec §4 the auto resolution returns inline (zero-byte
+    // body, returned as null). Explicit modes are honoured.
     if (kind === 'empty') {
-        if (requested === 'auto' || requested === 'schema') {
-            return { ok: true, resolved_mode: 'schema' }
-        }
+        if (requested === 'auto') return { ok: true, resolved_mode: 'inline' }
         return { ok: true, resolved_mode: requested as ResolvedBodyMode }
     }
 

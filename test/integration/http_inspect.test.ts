@@ -49,4 +49,13 @@ describe('http_inspect', () => {
         const r = await httpInspectTool({ cache_id: 'req_x', schema_format: 'paths' }, cache)
         expect(isError(r)).toBe(true)
     })
+
+    it('returns next_step_hints for json bodies (spec §5.6)', async () => {
+        const cache = new Cache(60)
+        const id = makeEntry(cache, { data: [{ id: 1 }, { id: 2 }] })
+        const r = await httpInspectTool({ cache_id: id, schema_format: 'paths' }, cache)
+        if (isError(r)) throw new Error()
+        expect(r.next_step_hints).toBeDefined()
+        expect((r.next_step_hints ?? []).length).toBeGreaterThan(0)
+    })
 })

@@ -1,17 +1,37 @@
 import { existsSync, realpathSync } from 'node:fs'
-import { resolve, sep } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import type { ErrorEnvelope } from '../types.js'
 import { makeError } from './errors.js'
 
-// Resolve a path through symlinks where possible. If the path doesn't exist
-// (common: a download_to target that hasn't been created yet), fall back to
-// lexical resolve. This matters for security: a symlink pointing outside
-// MAGPIE_FILES_ROOT could otherwise sneak past a lexical-only check.
+// Resolve a path through symlinks. If the full path doesn't exist (common:
+// a download_to target that hasn't been created yet), walk UP to the nearest
+// existing ancestor, realpath that ancestor, then re-attach the remaining
+// (non-existent) tail. This closes a security hole where lexical fallback
+// would let `<root>/symlinked-dir/new.txt` escape MAGPIE_FILES_ROOT — the
+// symlink ancestor was never resolved, so `startsWith(root + sep)` lied.
 const canonicalize = (p: string): string => {
+    const abs = resolve(p)
     try {
-        return realpathSync(p)
+        return realpathSync(abs)
     } catch {
-        return resolve(p)
+        // Walk up component by component until something exists.
+        const tail: string[] = []
+        let cur = abs
+        for (;;) {
+            const idx = cur.lastIndexOf(sep)
+            if (idx < 0) return abs // shouldn't happen for an absolute path
+            const last = cur.slice(idx + 1)
+            const parent = idx === 0 ? sep : cur.slice(0, idx)
+            try {
+                const realParent = realpathSync(parent)
+                tail.unshift(last)
+                return tail.length > 0 ? join(realParent, ...tail) : realParent
+            } catch {
+                tail.unshift(last)
+                cur = parent
+                if (cur === sep) return abs // reached root without finding anything
+            }
+        }
     }
 }
 

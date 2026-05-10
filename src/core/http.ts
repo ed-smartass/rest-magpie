@@ -93,7 +93,30 @@ export const performHttp = async (
             // be clever — match the spec letter so callers are not surprised.
             const isMethodChangingStatus =
                 resp.status === 301 || resp.status === 302 || resp.status === 303
+            const isPreserveStatus = resp.status === 307 || resp.status === 308
             const isUnsafe = currentMethod !== 'GET' && currentMethod !== 'HEAD'
+            const isStreamedBody =
+                currentBody !== undefined &&
+                typeof currentBody !== 'string' &&
+                !Buffer.isBuffer(currentBody)
+
+            // 307/308 preserve method+body, but a Readable body (multipart
+            // upload) was consumed by the first fetch — replaying it would
+            // throw "Response body object should not be disturbed or locked"
+            // from undici. Surface a clear `invalid_input` so the caller can
+            // re-issue against the final URL directly.
+            if (isPreserveStatus && isStreamedBody) {
+                const e = new Error(
+                    'invalid_input: cannot follow ' +
+                        resp.status +
+                        ' redirect — the original request used a streamed body (multipart) which cannot be replayed. Re-issue the request directly to ' +
+                        next +
+                        '.',
+                )
+                ;(e as { kind?: string }).kind = 'invalid_input'
+                throw e
+            }
+
             if (isMethodChangingStatus && isUnsafe) {
                 currentMethod = 'GET'
                 currentBody = undefined

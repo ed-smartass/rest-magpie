@@ -176,6 +176,28 @@ describe('performHttp redirects and limits', () => {
         expect(r.redirectChain).toEqual([])
     })
 
+    it('rejects 307 redirect with a streamed (multipart) body — replay impossible', async () => {
+        // 307/308 preserve method+body, but a Readable body has been consumed
+        // by the first request. Replaying it would fail in undici with
+        // "Response body object should not be disturbed or locked". We surface
+        // a deterministic invalid_input instead.
+        server.use(
+            http.post('https://api.test/upload', () =>
+                HttpResponse.redirect('https://api.test/upload-final', 307),
+            ),
+        )
+        await expect(
+            performHttp(
+                {
+                    method: 'POST',
+                    url: 'https://api.test/upload',
+                    multipart: { fields: { name: 'alice' } },
+                },
+                {},
+            ),
+        ).rejects.toThrow(/cannot follow 307 redirect.*streamed body/)
+    })
+
     it('rejects body_too_large', async () => {
         const key = 'MAGPIE_MAX_RESPONSE_BYTES'
         process.env[key] = '100'

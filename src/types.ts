@@ -123,6 +123,7 @@ export interface HttpInspectParams {
 }
 export interface HttpInspectResult {
     schema: Schema
+    next_step_hints?: string[]
 }
 
 // Unified error envelope.
