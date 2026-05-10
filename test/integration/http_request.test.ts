@@ -30,7 +30,7 @@ describe('http_request tool', () => {
     })
 
     it('auto resolves to head when body is between thresholds', async () => {
-        const k1 = 'MAGPIE_INLINE_THRESHOLD_BYTES'
+        const k1 = 'PEEK_INLINE_THRESHOLD_BYTES'
         process.env[k1] = '10'
         resetConfigCache()
         server.use(
@@ -141,7 +141,7 @@ describe('http_request tool', () => {
     })
 
     it('errors body_too_large_for_inline when explicit inline > cap, surfaces cache_id, body retrievable', async () => {
-        process.env.MAGPIE_INLINE_BODY_CAP = '10'
+        process.env.PEEK_INLINE_BODY_CAP = '10'
         resetConfigCache()
         server.use(http.get('https://api.test/q', () => HttpResponse.json({ s: 'x'.repeat(200) })))
         const cache = new Cache(60)
@@ -162,11 +162,11 @@ describe('http_request tool', () => {
             expect(entry).toBeDefined()
             expect(entry?.body).toEqual({ s: 'x'.repeat(200) })
         }
-        Reflect.deleteProperty(process.env, 'MAGPIE_INLINE_BODY_CAP')
+        Reflect.deleteProperty(process.env, 'PEEK_INLINE_BODY_CAP')
     })
 
-    describe('with MAGPIE_FILES_ROOT', () => {
-        const key = 'MAGPIE_FILES_ROOT'
+    describe('with PEEK_FILES_ROOT', () => {
+        const key = 'PEEK_FILES_ROOT'
 
         afterEach(() => {
             delete process.env[key]
@@ -174,7 +174,7 @@ describe('http_request tool', () => {
         })
 
         it('rejects download_to outside the root', async () => {
-            process.env[key] = '/tmp/magpie-data'
+            process.env[key] = '/tmp/peek-data'
             resetConfigCache()
             const cache = new Cache(60)
             const r = await httpRequestTool(
@@ -184,13 +184,13 @@ describe('http_request tool', () => {
             expect(isError(r)).toBe(true)
             if (isError(r)) {
                 expect(r.error.kind).toBe('invalid_input')
-                expect(r.error.message).toContain('/tmp/magpie-data')
+                expect(r.error.message).toContain('/tmp/peek-data')
                 expect(r.error.message).toContain('download_to')
             }
         })
 
         it('rejects multipart file path outside the root', async () => {
-            process.env[key] = '/tmp/magpie-data'
+            process.env[key] = '/tmp/peek-data'
             resetConfigCache()
             const cache = new Cache(60)
             const r = await httpRequestTool(
@@ -209,14 +209,14 @@ describe('http_request tool', () => {
         })
 
         it('rejects path traversal escape via ..', async () => {
-            process.env[key] = '/tmp/magpie-data'
+            process.env[key] = '/tmp/peek-data'
             resetConfigCache()
             const cache = new Cache(60)
             const r = await httpRequestTool(
                 {
                     method: 'GET',
                     url: 'https://api.test/x',
-                    download_to: '/tmp/magpie-data/../../etc/shadow',
+                    download_to: '/tmp/peek-data/../../etc/shadow',
                 },
                 cache,
             )
@@ -225,7 +225,7 @@ describe('http_request tool', () => {
         })
 
         it('allows download_to under the root', async () => {
-            process.env[key] = '/tmp/magpie-data'
+            process.env[key] = '/tmp/peek-data'
             resetConfigCache()
             server.use(
                 http.get(
@@ -238,20 +238,20 @@ describe('http_request tool', () => {
             )
             const cache = new Cache(60)
             const fs = await import('node:fs')
-            fs.mkdirSync('/tmp/magpie-data', { recursive: true })
+            fs.mkdirSync('/tmp/peek-data', { recursive: true })
             const r = await httpRequestTool(
                 {
                     method: 'GET',
                     url: 'https://api.test/file',
-                    download_to: '/tmp/magpie-data/out.bin',
+                    download_to: '/tmp/peek-data/out.bin',
                 },
                 cache,
             )
             expect(isError(r)).toBe(false)
-            fs.rmSync('/tmp/magpie-data/out.bin', { force: true })
+            fs.rmSync('/tmp/peek-data/out.bin', { force: true })
         })
 
-        it('does not constrain when MAGPIE_FILES_ROOT is unset', async () => {
+        it('does not constrain when PEEK_FILES_ROOT is unset', async () => {
             const cache = new Cache(60)
             // Even though /tmp/anywhere isn't restricted, the actual fetch will fail
             // for unrelated reasons (no msw handler) — we only care that the validation

@@ -1,13 +1,13 @@
-# rest-magpie — Design Spec
+# mcp-peek — Design Spec
 
 **Status:** approved for implementation
 **Date:** 2026-05-09
 **Owner:** smartass
-**Repo:** TBD (to be created — proposed `github.com/<user>/rest-magpie`)
-**npm:** `rest-magpie` (verified available)
-**Docker:** `ghcr.io/<user>/rest-magpie`
+**Repo:** TBD (to be created — proposed `github.com/<user>/mcp-peek`)
+**npm:** `mcp-peek` (verified available)
+**Docker:** `ghcr.io/<user>/mcp-peek`
 
-> Tagline: *"REST that picks only the shiny bits."*
+> Tagline: *"Peek the schema, slice the body."*
 
 ---
 
@@ -35,7 +35,7 @@ LLM agents using MCP tooling for REST APIs face two recurring pains:
 - Cookie jars — passthrough via `Cookie` header is enough.
 - Streaming / SSE — buffered request-response model only.
 - Saved profiles / credential storage. Headers go in each call.
-- Pretty-printing HTML to markdown — that's `fetch-mcp`'s territory; rest-magpie returns raw text.
+- Pretty-printing HTML to markdown — that's `fetch-mcp`'s territory; mcp-peek returns raw text.
 
 ## 3. Architecture
 
@@ -136,11 +136,11 @@ http_request({
     body_kind: "json" | "text" | "binary" | "empty",
     body_inclusion: {
       resolved_mode: "schema" | "head" | "inline",  // what mode actually applied (for "auto")
-      inline_threshold_bytes: number,               // current MAGPIE_INLINE_THRESHOLD_BYTES
-      head_preview_threshold_bytes: number,         // current MAGPIE_HEAD_PREVIEW_THRESHOLD
-      head_preview_items: number,                   // current MAGPIE_HEAD_PREVIEW_ITEMS
-      head_preview_string_chars: number,            // current MAGPIE_HEAD_PREVIEW_STRING
-      inline_body_cap_bytes: number,                // current MAGPIE_INLINE_BODY_CAP
+      inline_threshold_bytes: number,               // current PEEK_INLINE_THRESHOLD_BYTES
+      head_preview_threshold_bytes: number,         // current PEEK_HEAD_PREVIEW_THRESHOLD
+      head_preview_items: number,                   // current PEEK_HEAD_PREVIEW_ITEMS
+      head_preview_string_chars: number,            // current PEEK_HEAD_PREVIEW_STRING
+      inline_body_cap_bytes: number,                // current PEEK_INLINE_BODY_CAP
       reason?: string,                              // populated only when the resolved mode wasn't obvious
     },
     redirect_chain: string[],                // empty if no redirects
@@ -170,17 +170,17 @@ body_mode == "schema"  → never include the body inline; only the schema is ret
                          resolved_mode = "schema" for every body_kind (incl. empty / binary).
 
 body_mode == "inline"  → include the full body iff body_kind ∈ {json, text} AND
-                         body_bytes ≤ MAGPIE_INLINE_BODY_CAP.
+                         body_bytes ≤ PEEK_INLINE_BODY_CAP.
                          body_kind == binary  → invalid_input (binaries are never inlined; use save_to or download_to).
                          body_kind == empty   → resolved_mode = "inline", body = null.
                          body_bytes > cap     → body_too_large_for_inline error;
                                                 cache_id still valid (agent pivots to http_read).
 
 body_mode == "head"    → include schema + body_preview.
-                         body_kind == json    → arrays truncated to MAGPIE_HEAD_PREVIEW_ITEMS, strings to
-                                                MAGPIE_HEAD_PREVIEW_STRING chars; sibling _truncated markers
+                         body_kind == json    → arrays truncated to PEEK_HEAD_PREVIEW_ITEMS, strings to
+                                                PEEK_HEAD_PREVIEW_STRING chars; sibling _truncated markers
                                                 describe what was dropped.
-                         body_kind == text    → body_preview = first MAGPIE_HEAD_PREVIEW_STRING chars +
+                         body_kind == text    → body_preview = first PEEK_HEAD_PREVIEW_STRING chars +
                                                 _truncated marker if longer; effectively the existing
                                                 non-JSON descriptor's `head` field promoted to a
                                                 first-class field.
@@ -190,8 +190,8 @@ body_mode == "head"    → include schema + body_preview.
 body_mode == "auto"    → server picks:
                            body_kind == binary  → "schema" (binaries are never inlined or previewed inline).
                            body_kind == empty   → "inline" (the body is null; trivially small, no harm).
-                           body_bytes ≤ MAGPIE_INLINE_THRESHOLD_BYTES   → "inline"
-                           ≤ MAGPIE_HEAD_PREVIEW_THRESHOLD              → "head"
+                           body_bytes ≤ PEEK_INLINE_THRESHOLD_BYTES   → "inline"
+                           ≤ PEEK_HEAD_PREVIEW_THRESHOLD              → "head"
                            else                                          → "schema"
 ```
 
@@ -238,7 +238,7 @@ server_info({}) → {
   version: string,                                  // build-time version (matches package.json)
   runtime: "npx" | "docker" | "unknown",            // detected via /.dockerenv + heuristics
   cwd: string,                                      // process.cwd()
-  files_root: string | null,                        // resolved MAGPIE_FILES_ROOT or null when unset
+  files_root: string | null,                        // resolved PEEK_FILES_ROOT or null when unset
   effective_limits: {
     inline_threshold_bytes: number,
     head_preview_threshold_bytes: number,
@@ -339,9 +339,9 @@ Inferred via `genson-js`. `required` is **omitted** (single-sample inference is 
 
 | Setting | Env | Default |
 |---|---|---|
-| Max depth | `MAGPIE_SCHEMA_MAX_DEPTH` | 10 |
-| Max object keys | `MAGPIE_SCHEMA_MAX_OBJECT_KEYS` | 200 |
-| Sample string max | `MAGPIE_SCHEMA_SAMPLE_MAX_STRING` | 100 |
+| Max depth | `PEEK_SCHEMA_MAX_DEPTH` | 10 |
+| Max object keys | `PEEK_SCHEMA_MAX_OBJECT_KEYS` | 200 |
+| Sample string max | `PEEK_SCHEMA_SAMPLE_MAX_STRING` | 100 |
 
 ### 5.6 `next_step_hints` (advisory)
 
@@ -360,8 +360,8 @@ Hints are strings of valid jq, but the server does **not** run them — the agen
 
 - **Storage:** in-memory `Map<cache_id, CacheEntry>`. No SQLite, no persistence.
 - **Key:** opaque random ULID-style `cache_id` (e.g. `req_01HXY7PZQ8...`). No deduplication; every `http_request` produces a new id even if URL/body are identical.
-- **TTL:** 600 seconds (env `MAGPIE_CACHE_TTL_SECONDS`). On insert, schedule a `setTimeout` to evict; on access, no sliding (TTL is from creation).
-- **Size:** bounded only by `MAGPIE_MAX_RESPONSE_BYTES` per entry (default 50MB). No global cap in MVP — restart and 10-min eviction keep it bounded.
+- **TTL:** 600 seconds (env `PEEK_CACHE_TTL_SECONDS`). On insert, schedule a `setTimeout` to evict; on access, no sliding (TTL is from creation).
+- **Size:** bounded only by `PEEK_MAX_RESPONSE_BYTES` per entry (default 50MB). No global cap in MVP — restart and 10-min eviction keep it bounded.
 - **Cache miss:** `error.kind = "cache_miss"` for `http_read` / `http_inspect` against unknown or expired ids.
 
 `CacheEntry` shape:
@@ -378,8 +378,8 @@ Hints are strings of valid jq, but the server does **not** run them — the agen
 ## 7. jq integration
 
 - **Default engine:** `jq-wasm` (pure WASM, ~600KB, zero system deps). Bundled.
-- **Opt-in native:** if `MAGPIE_USE_NATIVE_JQ=1`, use `node-jq` (subprocess to system `jq` binary). Faster on large bodies; requires `jq` installed.
-- **Timeout:** 5000ms (env `MAGPIE_JQ_TIMEOUT_MS`). Implemented via `Promise.race` for wasm; via `subprocess.kill('SIGKILL')` for native.
+- **Opt-in native:** if `PEEK_USE_NATIVE_JQ=1`, use `node-jq` (subprocess to system `jq` binary). Faster on large bodies; requires `jq` installed.
+- **Timeout:** 5000ms (env `PEEK_JQ_TIMEOUT_MS`). Implemented via `Promise.race` for wasm; via `subprocess.kill('SIGKILL')` for native.
 - **Multi-output:** jq programs like `.data[]` produce multiple JSON outputs.
   - `output_mode: "all"` (default) — when jq emits multiple outputs, collect them into an array; when it emits a single output, return that value as-is.
   - `output_mode: "first"` — return the first emitted value (or `undefined` if jq emits nothing).
@@ -406,14 +406,14 @@ Hints are strings of valid jq, but the server does **not** run them — the agen
 Streaming builder backed by `Readable.from(asyncGenerator())`, fed into `fetch` with `duplex: "half"`.
 
 - `multipart.files[].path` — streamed via `createReadStream`. Filename defaults to `basename(path)`; content_type defaults to `application/octet-stream`.
-- `multipart.files[].content_base64` — decoded into a `Buffer` and streamed from memory. Useful for remote MCP scenarios where path semantics differ between agent and server, and for zero-volume Docker. Capped by `MAGPIE_MAX_INLINE_FILE_BYTES` (default 10 MB pre-base64). `MAGPIE_FILES_ROOT` does not apply to this mode (no path to canonicalise).
+- `multipart.files[].content_base64` — decoded into a `Buffer` and streamed from memory. Useful for remote MCP scenarios where path semantics differ between agent and server, and for zero-volume Docker. Capped by `PEEK_MAX_INLINE_FILE_BYTES` (default 10 MB pre-base64). `PEEK_FILES_ROOT` does not apply to this mode (no path to canonicalise).
 - Header positions (field name, filename, content_type) are validated for CR/LF/NUL and rejected with `invalid_input` if any control character is present (header injection guard); `\` and `"` in name/filename values are RFC 7578 §4.2 escaped.
 - Uploads use **chunked transfer encoding** (no Content-Length). Most modern servers handle this; some primitive test servers / legacy reverse proxies reject it. Tracked for v0.3 compat-mode if real demand surfaces.
 - No nested multipart support.
 
 ### 8.3 Response handling
 
-1. Read full body up to `MAGPIE_MAX_RESPONSE_BYTES` (default 50MB) → `body_too_large` if exceeded (server tracks via `ReadableStream` byte counter; aborts cleanly).
+1. Read full body up to `PEEK_MAX_RESPONSE_BYTES` (default 50MB) → `body_too_large` if exceeded (server tracks via `ReadableStream` byte counter; aborts cleanly).
 2. If `download_to` was set, stream straight to file; cache only metadata (`{path, byte_count, sha256}`) with `body_kind="binary"`.
 3. Otherwise classify by Content-Type (`core/content_type.ts`):
    - `application/json` or `*+json` → parse, body_kind=json
@@ -429,7 +429,7 @@ Streaming builder backed by `Readable.from(asyncGenerator())`, fed into `fetch` 
 | Auto-decompress (gzip, brotli, deflate) | yes (undici default) |
 | Follow redirects | yes, up to 10 hops; recorded in `meta.redirect_chain` |
 | `follow_redirects: false` | returns 3xx response directly |
-| TLS verify | strict; opt-out per-call (`tls_insecure: true`) or globally (`MAGPIE_TLS_INSECURE=1`) |
+| TLS verify | strict; opt-out per-call (`tls_insecure: true`) or globally (`PEEK_TLS_INSECURE=1`) |
 | HTTP/2/HTTP/3 | transparent via undici |
 | Streaming / SSE | not supported (documented as out-of-scope) |
 | Proxy | not in MVP |
@@ -451,8 +451,8 @@ Stable `kind` codes:
 | `network_error` | DNS, TCP refused, abort |
 | `tls_error` | cert validation failure (when not insecure) |
 | `redirect_loop` | exceeded max hops |
-| `body_too_large` | response exceeded `MAGPIE_MAX_RESPONSE_BYTES` |
-| `body_too_large_for_inline` | response cached but exceeded MAGPIE_INLINE_BODY_CAP for `body_mode: "inline"`; `error.detail.cache_id` is set so the agent can switch to `http_read` without refetching |
+| `body_too_large` | response exceeded `PEEK_MAX_RESPONSE_BYTES` |
+| `body_too_large_for_inline` | response cached but exceeded PEEK_INLINE_BODY_CAP for `body_mode: "inline"`; `error.detail.cache_id` is set so the agent can switch to `http_read` without refetching |
 | `unsupported_field` | request used a removed/renamed parameter (e.g. legacy `include_body`); `error.message` includes a migration hint |
 | `cache_miss` | cache_id unknown or expired |
 | `jq_syntax_error` | jq could not parse expression |
@@ -469,29 +469,29 @@ All env vars are optional with sensible defaults.
 
 | Env | Default | Purpose |
 |---|---|---|
-| `MAGPIE_DEFAULT_TIMEOUT_MS` | 30000 | per-request HTTP timeout when not overridden |
-| `MAGPIE_MAX_RESPONSE_BYTES` | 52428800 (50MB) | hard cap on in-memory response size |
-| `MAGPIE_CACHE_TTL_SECONDS` | 600 | cache entry lifetime |
-| `MAGPIE_INLINE_THRESHOLD_BYTES` | 8192 | `body_mode: "auto"` resolves to `"inline"` for bodies up to this size (renamed from `MAGPIE_AUTO_INCLUDE_BODY_BYTES`). |
-| `MAGPIE_HEAD_PREVIEW_THRESHOLD` | 65536 (64 KB) | `body_mode: "auto"` resolves to `"head"` for bodies up to this size (when above the inline threshold). |
-| `MAGPIE_HEAD_PREVIEW_ITEMS` | 5 | array preview length in `body_mode: "head"` |
-| `MAGPIE_HEAD_PREVIEW_STRING` | 200 | string preview length (chars) in `body_mode: "head"` |
-| `MAGPIE_INLINE_BODY_CAP` | 262144 (256 KB) | hard cap on `body_mode: "inline"`; over this → `body_too_large_for_inline` error |
-| `MAGPIE_MAX_INLINE_FILE_BYTES` | 10485760 (10 MB) | cap on the decoded size of `multipart.files[].content_base64`; over this → `invalid_input` |
-| `MAGPIE_JQ_TIMEOUT_MS` | 5000 | per-mask jq timeout |
-| `MAGPIE_USE_NATIVE_JQ` | 0 | switch to subprocess `node-jq` |
-| `MAGPIE_TLS_INSECURE` | 0 | global insecure TLS toggle |
-| `MAGPIE_SCHEMA_MAX_DEPTH` | 10 | recursion depth for schema renderers |
-| `MAGPIE_SCHEMA_MAX_OBJECT_KEYS` | 200 | per-object key cap |
-| `MAGPIE_SCHEMA_SAMPLE_MAX_STRING` | 100 | string truncation in samples |
-| `MAGPIE_FILES_ROOT` | (unset) | when set, every server-side file path (`multipart.files[].path`, `download_to`, `save_to`) must canonicalize to a location under this prefix; otherwise the call fails with `error.kind = "invalid_input"`. `multipart.files[].content_base64` is exempt (no path). Unset = no constraint. |
+| `PEEK_DEFAULT_TIMEOUT_MS` | 30000 | per-request HTTP timeout when not overridden |
+| `PEEK_MAX_RESPONSE_BYTES` | 52428800 (50MB) | hard cap on in-memory response size |
+| `PEEK_CACHE_TTL_SECONDS` | 600 | cache entry lifetime |
+| `PEEK_INLINE_THRESHOLD_BYTES` | 8192 | `body_mode: "auto"` resolves to `"inline"` for bodies up to this size (renamed from `PEEK_AUTO_INCLUDE_BODY_BYTES`). |
+| `PEEK_HEAD_PREVIEW_THRESHOLD` | 65536 (64 KB) | `body_mode: "auto"` resolves to `"head"` for bodies up to this size (when above the inline threshold). |
+| `PEEK_HEAD_PREVIEW_ITEMS` | 5 | array preview length in `body_mode: "head"` |
+| `PEEK_HEAD_PREVIEW_STRING` | 200 | string preview length (chars) in `body_mode: "head"` |
+| `PEEK_INLINE_BODY_CAP` | 262144 (256 KB) | hard cap on `body_mode: "inline"`; over this → `body_too_large_for_inline` error |
+| `PEEK_MAX_INLINE_FILE_BYTES` | 10485760 (10 MB) | cap on the decoded size of `multipart.files[].content_base64`; over this → `invalid_input` |
+| `PEEK_JQ_TIMEOUT_MS` | 5000 | per-mask jq timeout |
+| `PEEK_USE_NATIVE_JQ` | 0 | switch to subprocess `node-jq` |
+| `PEEK_TLS_INSECURE` | 0 | global insecure TLS toggle |
+| `PEEK_SCHEMA_MAX_DEPTH` | 10 | recursion depth for schema renderers |
+| `PEEK_SCHEMA_MAX_OBJECT_KEYS` | 200 | per-object key cap |
+| `PEEK_SCHEMA_SAMPLE_MAX_STRING` | 100 | string truncation in samples |
+| `PEEK_FILES_ROOT` | (unset) | when set, every server-side file path (`multipart.files[].path`, `download_to`, `save_to`) must canonicalize to a location under this prefix; otherwise the call fails with `error.kind = "invalid_input"`. `multipart.files[].content_base64` is exempt (no path). Unset = no constraint. |
 
-When `MAGPIE_FILES_ROOT` is set, the server also appends a one-line note to `http_request` and `http_read` tool descriptions (e.g. *"Server-side file paths must reside under `/data`."*) so LLM clients see the constraint at call-authoring time.
+When `PEEK_FILES_ROOT` is set, the server also appends a one-line note to `http_request` and `http_read` tool descriptions (e.g. *"Server-side file paths must reside under `/data`."*) so LLM clients see the constraint at call-authoring time.
 
 ## 11. Repository layout
 
 ```
-rest-magpie/
+mcp-peek/
 ├── src/
 │   ├── index.ts                  # MCP server bootstrap (stdio)
 │   ├── tools/
@@ -559,7 +559,7 @@ This is the largest source of real-world confusion, so it's the spec's job to be
 | `download_to` | host (agent's) | container (use same-path bind mount) | server's filesystem |
 | `save_to` (in `http_read`) | host (agent's) | container (use same-path bind mount) | server's filesystem |
 
-`MAGPIE_FILES_ROOT`, when set, additionally constrains the three path-based fields to a canonicalised root. `content_base64` is exempt because there's no path to canonicalise.
+`PEEK_FILES_ROOT`, when set, additionally constrains the three path-based fields to a canonicalised root. `content_base64` is exempt because there's no path to canonicalise.
 
 ### npm
 
@@ -567,9 +567,9 @@ This is the largest source of real-world confusion, so it's the spec's job to be
 // claude_desktop_config.json
 {
   "mcpServers": {
-    "rest-magpie": {
+    "mcp-peek": {
       "command": "npx",
-      "args": ["-y", "rest-magpie"]
+      "args": ["-y", "mcp-peek"]
     }
   }
 }
@@ -580,7 +580,7 @@ This is the largest source of real-world confusion, so it's the spec's job to be
 ```jsonc
 {
   "mcpServers": {
-    "rest-magpie": {
+    "mcp-peek": {
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
@@ -588,21 +588,21 @@ This is the largest source of real-world confusion, so it's the spec's job to be
         // path are identical, so the agent's absolute paths "just work"
         // without any host↔container translation logic.
         "-v", "/home/me/data:/home/me/data",
-        "-e", "MAGPIE_FILES_ROOT=/home/me/data",
-        "ghcr.io/<user>/rest-magpie:latest"
+        "-e", "PEEK_FILES_ROOT=/home/me/data",
+        "ghcr.io/<user>/mcp-peek:latest"
       ]
     }
   }
 }
 ```
 
-**Path mapping convention.** Volume mounts are required for `multipart.files[].path`, `download_to`, and `save_to` to reference real host files. The recommended pattern is a *same-path bind mount* (`-v /host/X:/host/X`) paired with `-e MAGPIE_FILES_ROOT=/host/X`. With both set:
+**Path mapping convention.** Volume mounts are required for `multipart.files[].path`, `download_to`, and `save_to` to reference real host files. The recommended pattern is a *same-path bind mount* (`-v /host/X:/host/X`) paired with `-e PEEK_FILES_ROOT=/host/X`. With both set:
 
 - The agent passes ordinary host paths under `/host/X/...`; they resolve identically inside the container — no path translation needed.
-- `MAGPIE_FILES_ROOT` makes the constraint visible (it's appended to relevant tool descriptions) and enforces it (any path outside the root → `invalid_input` with a clear message).
+- `PEEK_FILES_ROOT` makes the constraint visible (it's appended to relevant tool descriptions) and enforces it (any path outside the root → `invalid_input` with a clear message).
 - Path canonicalization rejects traversal escapes (`/host/X/../../etc/passwd` resolves to `/etc/passwd`, fails the check).
 
-When `MAGPIE_FILES_ROOT` is unset, no constraint is applied — useful for `npx`-mode usage where the server's filesystem is the host's. In Docker without the env, the agent must guess host↔container path mapping itself, which it usually gets wrong; setting the env is the documented happy-path.
+When `PEEK_FILES_ROOT` is unset, no constraint is applied — useful for `npx`-mode usage where the server's filesystem is the host's. In Docker without the env, the agent must guess host↔container path mapping itself, which it usually gets wrong; setting the env is the documented happy-path.
 
 Image: multistage `node:20-alpine` → final `node:20-alpine` with only `dist/` and `package.json`. Should land under 100MB.
 
@@ -659,7 +659,7 @@ Replaces `include_body` with `body_mode` (breaking, no alias). Adds `body_mode: 
 ## 16. CI / Release
 
 - **PR pipeline:** Biome lint, `tsc --noEmit`, `vitest run`, build. Matrix: Node 20 + 22.
-- **Tag pipeline (`v*.*.*`):** publish to npm (`rest-magpie`), build and push docker image to `ghcr.io/<user>/rest-magpie` and optionally `docker.io/<user>/rest-magpie`. Both `:latest` and `:v0.1.0` tags.
+- **Tag pipeline (`v*.*.*`):** publish to npm (`mcp-peek`), build and push docker image to `ghcr.io/<user>/mcp-peek` and optionally `docker.io/<user>/mcp-peek`. Both `:latest` and `:v0.1.0` tags.
 - **Branching:** trunk-based; PR → `main`; tag from `main`.
 - **Versioning:** semver. `changesets` (preferred) or conventional commits.
 - **License:** MIT.
@@ -671,7 +671,7 @@ These are settled but worth flagging for implementers:
 
 - **No deduplication of cache.** Every request gets a new `cache_id` even if URL/body match. If you need re-fetch behavior, just call again.
 - **HTTP 4xx/5xx are not MCP errors.** They flow through the success path with the response body fully cached.
-- **`body_mode` resolution looks only at byte count, not structure.** A 7 KB JSON of base64 garbage will resolve to `"inline"`; a 9 KB nicely-shaped response will resolve to `"head"`. Both thresholds (`MAGPIE_INLINE_THRESHOLD_BYTES`, `MAGPIE_HEAD_PREVIEW_THRESHOLD`) tunable via env.
+- **`body_mode` resolution looks only at byte count, not structure.** A 7 KB JSON of base64 garbage will resolve to `"inline"`; a 9 KB nicely-shaped response will resolve to `"head"`. Both thresholds (`PEEK_INLINE_THRESHOLD_BYTES`, `PEEK_HEAD_PREVIEW_THRESHOLD`) tunable via env.
 - **Multipart files have two payload shapes.** `path` is the default (server-side absolute path, streamed via `createReadStream`). `content_base64` is the remote-MCP/zero-volume alternative — same agent-UX, but bytes inline. They are mutually exclusive per file. Capped to keep base64-in-JSON-RPC bloat finite.
 - **`schema_format: json_schema` returns an object, others return strings.** Agents need to check `typeof schema`. Documented in tool description.
 - **`next_step_hints` are advisory, not authoritative.** The server proposes; the agent picks one or writes its own and calls `http_read` itself.

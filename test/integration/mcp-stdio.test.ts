@@ -160,8 +160,8 @@ describe('MCP stdio black-box smoke', () => {
     // node_modules/.bin/, so process.argv[1] differs from the real dist path.
     // The entrypoint guard must compare resolved real paths, not raw strings.
     it('boots when invoked through a symlink (npx/.bin pattern)', async () => {
-        const dir = mkdtempSync(join(tmpdir(), 'rest-magpie-bin-'))
-        const link = join(dir, 'rest-magpie')
+        const dir = mkdtempSync(join(tmpdir(), 'mcp-peek-bin-'))
+        const link = join(dir, 'mcp-peek')
         symlinkSync(resolve('dist/index.js'), link)
         try {
             const child = spawn('node', [link], { stdio: ['pipe', 'pipe', 'inherit'] })

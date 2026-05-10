@@ -13,7 +13,7 @@ const drainBody = async (body: Readable): Promise<Buffer> => {
 
 describe('buildMultipart', () => {
     it('encodes fields and files with proper boundaries', async () => {
-        const dir = mkdtempSync(join(tmpdir(), 'magpie-mp-'))
+        const dir = mkdtempSync(join(tmpdir(), 'peek-mp-'))
         const filePath = join(dir, 'hello.txt')
         writeFileSync(filePath, 'hello world', 'utf8')
 
@@ -39,7 +39,7 @@ describe('buildMultipart', () => {
     })
 
     it('falls back to basename + octet-stream when fields missing', async () => {
-        const dir = mkdtempSync(join(tmpdir(), 'magpie-mp-'))
+        const dir = mkdtempSync(join(tmpdir(), 'peek-mp-'))
         const p = join(dir, 'data.bin')
         writeFileSync(p, 'abc')
         const { body, contentType } = buildMultipart({
@@ -61,7 +61,7 @@ describe('buildMultipart', () => {
     })
 
     it('rejects CR/LF in filename (header injection guard)', () => {
-        const dir = mkdtempSync(join(tmpdir(), 'magpie-mp-'))
+        const dir = mkdtempSync(join(tmpdir(), 'peek-mp-'))
         const p = join(dir, 'a.bin')
         writeFileSync(p, 'x')
         expect(() =>
@@ -74,7 +74,7 @@ describe('buildMultipart', () => {
     })
 
     it('rejects CR/LF in content_type (header injection guard)', () => {
-        const dir = mkdtempSync(join(tmpdir(), 'magpie-mp-'))
+        const dir = mkdtempSync(join(tmpdir(), 'peek-mp-'))
         const p = join(dir, 'a.bin')
         writeFileSync(p, 'x')
         expect(() =>
@@ -87,7 +87,7 @@ describe('buildMultipart', () => {
     })
 
     it('escapes backslash and quote in filename per RFC 7578', async () => {
-        const dir = mkdtempSync(join(tmpdir(), 'magpie-mp-'))
+        const dir = mkdtempSync(join(tmpdir(), 'peek-mp-'))
         const p = join(dir, 'a.bin')
         writeFileSync(p, 'x')
         const { body } = buildMultipart({
@@ -117,7 +117,7 @@ describe('buildMultipart', () => {
     })
 
     it('rejects when both path and content_base64 supplied', () => {
-        const dir = mkdtempSync(join(tmpdir(), 'magpie-mp-'))
+        const dir = mkdtempSync(join(tmpdir(), 'peek-mp-'))
         const p = join(dir, 'a.bin')
         writeFileSync(p, 'x')
         expect(() =>
@@ -180,6 +180,6 @@ describe('buildMultipart', () => {
             buildMultipart({
                 files: { f: { content_base64: tooLong, filename: 'big.bin' } },
             }),
-        ).toThrow(/encoded size .* implies decoded > MAGPIE_MAX_INLINE_FILE_BYTES/)
+        ).toThrow(/encoded size .* implies decoded > PEEK_MAX_INLINE_FILE_BYTES/)
     })
 })

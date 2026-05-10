@@ -7,7 +7,7 @@ import type { JqOutputMode } from '../types.js'
 // We use raw() to keep multi-output handling (newline-separated JSONL) under
 // our own control and to get verbatim jq error messages we can classify.
 //
-// MAGPIE_USE_NATIVE_JQ env-toggle is documented in spec §7 but the actual
+// PEEK_USE_NATIVE_JQ env-toggle is documented in spec §7 but the actual
 // node-jq engine is backlogged to v0.2+ (spec §15). The native path will plug
 // in here — a thin if-branch around getJq() — when that work lands.
 

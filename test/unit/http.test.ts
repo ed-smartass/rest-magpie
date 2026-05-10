@@ -120,7 +120,7 @@ describe('performHttp body input', () => {
 
 describe('performHttp multipart', () => {
     it('sends multipart body', async () => {
-        const dir = mkdtempSync(join(tmpdir(), 'magpie-http-'))
+        const dir = mkdtempSync(join(tmpdir(), 'peek-http-'))
         const p = join(dir, 'x.txt')
         writeFileSync(p, 'abc', 'utf8')
         let receivedCt: string | null = null
@@ -199,7 +199,7 @@ describe('performHttp redirects and limits', () => {
     })
 
     it('rejects body_too_large', async () => {
-        const key = 'MAGPIE_MAX_RESPONSE_BYTES'
+        const key = 'PEEK_MAX_RESPONSE_BYTES'
         process.env[key] = '100'
         const { resetConfigCache } = await import('../../src/config.js')
         resetConfigCache()
@@ -222,7 +222,7 @@ describe('performHttp redirects and limits', () => {
 
 describe('performHttp download_to', () => {
     it('streams body to disk and skips in-memory buffering', async () => {
-        const dir = mkdtempSync(join(tmpdir(), 'magpie-dl-'))
+        const dir = mkdtempSync(join(tmpdir(), 'peek-dl-'))
         const target = join(dir, 'out.bin')
         server.use(
             http.get(

@@ -7,7 +7,7 @@ import { makeError } from './errors.js'
 // a download_to target that hasn't been created yet), walk UP to the nearest
 // existing ancestor, realpath that ancestor, then re-attach the remaining
 // (non-existent) tail. This closes a security hole where lexical fallback
-// would let `<root>/symlinked-dir/new.txt` escape MAGPIE_FILES_ROOT — the
+// would let `<root>/symlinked-dir/new.txt` escape PEEK_FILES_ROOT — the
 // symlink ancestor was never resolved, so `startsWith(root + sep)` lied.
 //
 // Use path.dirname/basename + path.parse(cur).root for the loop bound so the
@@ -89,16 +89,12 @@ export const ensureUnderRoot = (
 ): ErrorEnvelope | null => {
     if (root === undefined) return null
     if (isUnderRoot(candidate, root)) return null
-    return makeError(
-        'invalid_input',
-        fieldName + ' must be under MAGPIE_FILES_ROOT (' + root + ')',
-        {
-            field: fieldName,
-            value: candidate,
-            resolved: canonicalize(candidate),
-            root,
-            runtime: detectRuntime(),
-            hint: buildHint(root),
-        },
-    )
+    return makeError('invalid_input', fieldName + ' must be under PEEK_FILES_ROOT (' + root + ')', {
+        field: fieldName,
+        value: candidate,
+        resolved: canonicalize(candidate),
+        root,
+        runtime: detectRuntime(),
+        hint: buildHint(root),
+    })
 }

@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.3.0 — 2026-05-10
+
+**Renamed: `rest-magpie` → `mcp-peek`.** New tagline: *"Peek the schema, slice the body."* The package was published with effectively zero real installs (one-day bot-traffic spike, otherwise zero), so this is taken as a hard rename rather than a re-publish-and-alias dance.
+
+### Breaking
+- **npm package:** `rest-magpie` → `mcp-peek`. Old package is deprecated with a pointer to the new one. Install via `npm i mcp-peek` / `npx -y mcp-peek`.
+- **GitHub repo:** `ed-smartass/rest-magpie` → `ed-smartass/mcp-peek`. GitHub keeps a permanent redirect from the old slug, so existing clones / links continue to work.
+- **GHCR image:** `ghcr.io/ed-smartass/rest-magpie` → `ghcr.io/ed-smartass/mcp-peek`. Old image tags remain by digest but receive no new pushes.
+- **Env-var prefix:** every `MAGPIE_*` env var is renamed to `PEEK_*` (17 vars, e.g. `MAGPIE_FILES_ROOT` → `PEEK_FILES_ROOT`, `MAGPIE_INLINE_BODY_CAP` → `PEEK_INLINE_BODY_CAP`). No backwards-compat alias — mid-flight one-step rename while installs are zero.
+- **Bin name:** `rest-magpie` → `mcp-peek`. The Claude Desktop / Cursor / VS Code / etc. config snippets in the README all spawn `npx -y mcp-peek` now.
+- **MCP server identifier:** the server announces itself as `name: "mcp-peek"` in the JSON-RPC `initialize` handshake.
+
+### Docs
+- **README hero rewrite.** New tagline (`Peek the schema, slice the body.`), inline live-demo link instead of pill-button.
+- **New "Built for the agent" section** consolidating the three structural hooks: schema-first, `next_step_hints` + structured error envelopes (= self-correcting agent loop), and re-read via `cache_id`. Reframes the existing token-savings + single-permission stories as *consequences* of the agent-first design rather than parallel pitches.
+- **Agent-vs-human framing fix** starting at `## Tools`. Examples in `## Real-world examples` are now prefixed "The agent does:" so a human reader doesn't mistake the pseudo-code for CLI invocations.
+- **Comparison table** gains a row for "Structured errors + `next_step_hints`".
+- **Spec doc** renamed `2026-05-09-rest-magpie-design.md` → `2026-05-09-mcp-peek-design.md`, content updated.
+- **`server_info` example** version bumped to `0.3.0`.
+
+### Why now
+Zero real installs means the rename window is wide open and migration friction is theoretical, not actual. Promo (HN / r/ClaudeAI / dev.to / aggregators) is gated on a stable name; doing the rename *before* promo is the only way to avoid leaving v0.2 footprints across the open web.
+
 ## 0.2.2 — 2026-05-10
 
 External code review pass closing four correctness issues, two spec/doc drifts, and one Windows-portability bug Copilot flagged on the fix-PR itself. No public API changes; all fixes are behaviour-preserving on POSIX, behaviour-tightening on Windows + edge-case responses.

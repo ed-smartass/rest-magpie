@@ -45,8 +45,8 @@ describe('renderPaths', () => {
 
     it('depth-overflow at root level uses (root) prefix, not stray leading dot', () => {
         // Build a structure where depth overflows immediately at root.
-        const original = process.env.MAGPIE_SCHEMA_MAX_DEPTH
-        process.env.MAGPIE_SCHEMA_MAX_DEPTH = '0'
+        const original = process.env.PEEK_SCHEMA_MAX_DEPTH
+        process.env.PEEK_SCHEMA_MAX_DEPTH = '0'
         resetConfigCache()
         try {
             const out = renderPaths({ a: { b: 1 } }, 10)
@@ -58,9 +58,9 @@ describe('renderPaths', () => {
             }
         } finally {
             if (original === undefined) {
-                Reflect.deleteProperty(process.env, 'MAGPIE_SCHEMA_MAX_DEPTH')
+                Reflect.deleteProperty(process.env, 'PEEK_SCHEMA_MAX_DEPTH')
             } else {
-                process.env.MAGPIE_SCHEMA_MAX_DEPTH = original
+                process.env.PEEK_SCHEMA_MAX_DEPTH = original
             }
             resetConfigCache()
         }

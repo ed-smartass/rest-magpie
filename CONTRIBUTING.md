@@ -1,4 +1,4 @@
-# Contributing to rest-magpie
+# Contributing to mcp-peek
 
 Workflow conventions for this project. Read this once, then `git` becomes mechanical.
 
@@ -67,7 +67,7 @@ While the package is `0.x.y`:
 - **`0.x.y → 0.x.(y+1)`** stays bugfix-only.
 - Tag `1.0.0` only when you're ready to commit to backwards compatibility.
 
-For `rest-magpie`, expect to spend several months in `0.x` while feedback shapes the tool surface. Move to `1.0.0` once the API has held still through ≥2 minor releases without need for breaking changes.
+For `mcp-peek`, expect to spend several months in `0.x` while feedback shapes the tool surface. Move to `1.0.0` once the API has held still through ≥2 minor releases without need for breaking changes.
 
 ### Pre-release tags
 
@@ -79,7 +79,7 @@ For experimental work that needs npm distribution before stable release:
 1.0.0-rc.1      # release candidate
 ```
 
-Install via `npm install rest-magpie@beta` etc.
+Install via `npm install mcp-peek@beta` etc.
 
 ## Conventional Commits
 
@@ -203,7 +203,7 @@ git push --tags
 Release workflow will:
 1. Run tests and build on the tag commit.
 2. `npm publish --provenance` (requires `NPM_TOKEN` secret in repo settings).
-3. Build and push Docker image to `ghcr.io/<user>/rest-magpie:v0.2.0` and `:latest`.
+3. Build and push Docker image to `ghcr.io/<user>/mcp-peek:v0.2.0` and `:latest`.
 
 After tag pushes successfully, go to GitHub → Releases → Draft new release → select the tag → paste CHANGELOG section as release notes → publish. This shows the release on the repo's home page and notifies subscribers.
 
@@ -217,7 +217,7 @@ After tag pushes successfully, go to GitHub → Releases → Draft new release �
 ## X.Y.Z — YYYY-MM-DD
 
 ### Added
-- `node-jq` native engine via `MAGPIE_USE_NATIVE_JQ=1`.
+- `node-jq` native engine via `PEEK_USE_NATIVE_JQ=1`.
 - Proxy support via `HTTP_PROXY`/`HTTPS_PROXY` env vars.
 
 ### Fixed
@@ -247,7 +247,7 @@ git commit -am "chore: release v0.1.1"
 git tag v0.1.1 && git push --tags
 ```
 
-For `rest-magpie` we currently support **only the latest minor**. If a CVE lands on `0.5.x` and `main` is `0.6.x`, we don't backport — we just release `0.6.x+1`.
+For `mcp-peek` we currently support **only the latest minor**. If a CVE lands on `0.5.x` and `main` is `0.6.x`, we don't backport — we just release `0.6.x+1`.
 
 ## Branch protection on `main`
 
@@ -269,6 +269,6 @@ The exception is the very first commit (initial repo + `LICENSE` + `.gitignore`)
 
 ## How the MVP plan maps to PRs
 
-The implementation plan in `docs/plans/2026-05-09-rest-magpie.md` is grouped into **9 logical batches**, each becoming one PR. See the plan for the batch boundaries — every batch ends with a "branch / push / open PR / merge" instruction block.
+The implementation plan in `docs/plans/2026-05-09-mcp-peek.md` is grouped into **9 logical batches**, each becoming one PR. See the plan for the batch boundaries — every batch ends with a "branch / push / open PR / merge" instruction block.
 
 The first batch creates the project foundation (`package.json`, `tsconfig`, etc.) on a feature branch. The first commit on `main` (before any PR) is just an empty commit or `LICENSE + .gitignore + README.md` skeleton — done by the user during repo init.

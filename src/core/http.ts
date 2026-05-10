@@ -152,7 +152,7 @@ export const performHttp = async (
         throw e
     }
 
-    // Stream the body and enforce MAGPIE_MAX_RESPONSE_BYTES early.
+    // Stream the body and enforce PEEK_MAX_RESPONSE_BYTES early.
     const reader = resp.body?.getReader()
     let total = 0
 

@@ -131,7 +131,7 @@ describe('http_read', () => {
                 redirect_chain: [],
             },
         })
-        const dir = mkdtempSync(join(tmpdir(), 'magpie-save-'))
+        const dir = mkdtempSync(join(tmpdir(), 'peek-save-'))
         const p = join(dir, 'out.bin')
         const r = await httpReadTool({ cache_id: id, save_to: p }, cache)
         if (isError(r)) throw new Error()
@@ -139,9 +139,9 @@ describe('http_read', () => {
         expect(readFileSync(p).toString('hex')).toBe('deadbeef')
     })
 
-    it('rejects save_to outside MAGPIE_FILES_ROOT', async () => {
-        const key = 'MAGPIE_FILES_ROOT'
-        process.env[key] = '/tmp/magpie-data'
+    it('rejects save_to outside PEEK_FILES_ROOT', async () => {
+        const key = 'PEEK_FILES_ROOT'
+        process.env[key] = '/tmp/peek-data'
         const { resetConfigCache } = await import('../../src/config.js')
         resetConfigCache()
 
@@ -177,7 +177,7 @@ describe('http_read', () => {
         if (isError(r)) {
             expect(r.error.kind).toBe('invalid_input')
             expect(r.error.message).toContain('save_to')
-            expect(r.error.message).toContain('/tmp/magpie-data')
+            expect(r.error.message).toContain('/tmp/peek-data')
         }
 
         delete process.env[key]
