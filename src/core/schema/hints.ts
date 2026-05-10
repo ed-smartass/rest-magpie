@@ -30,14 +30,14 @@ const JQ_IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/
 const isJqIdent = (s: string): boolean => JQ_IDENT.test(s)
 
 // Render `.<key>` safely — bracket-quoted form for non-identifier keys.
-// jq accepts `."weird-key"`, `."2fa"`, etc. Strip raw double-quotes /
-// backslashes / control chars so the emitted hint is itself parseable.
+// jq accepts `."weird-key"`, `."2fa"`, etc. Escape backslash + double-quote
+// for the JSON-style string literal, then strip the entire ASCII control
+// range (and DEL) so no embedded \x00-\x1F or \x7F can break the parser.
+// biome-ignore lint/suspicious/noControlCharactersInRegex: stripping all controls is the point
+const CONTROL_CHARS = /[\x00-\x1f\x7f]/g
 const dotKey = (k: string): string => {
     if (isJqIdent(k)) return '.' + k
-    const escaped = k
-        .replace(/\\/g, '\\\\')
-        .replace(/"/g, '\\"')
-        .replace(/[\r\n\t\0]/g, '')
+    const escaped = k.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(CONTROL_CHARS, '')
     return '."' + escaped + '"'
 }
 

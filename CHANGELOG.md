@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.2.1 — 2026-05-10
+
+Post-v0.2 hardening pass closing ten correctness issues from two rounds of Copilot review on the v0.2 PR wave (#22, #25, #26, #29), plus a small wire-level rename for naming consistency (`meta.body_inclusion.inline_cap_bytes` → `inline_body_cap_bytes`) — taken now while there are 0 npm installs to migrate. README also reorganised for promo readiness (per-client install snippets, `body_mode` and `server_info` sections, concrete token-savings table on real APIs).
+
+### Fixed
+- **`body_too_large_for_inline` now actually surfaces a usable `cache_id`.** Previous code returned the error before `cache.put`, and `error.detail` omitted `cache_id` entirely, so the recovery hint ("use `http_read` with the returned cache_id") was a lie. Entry is now cached with a placeholder `body_inclusion` and `cache_id` is spliced into the error detail.
+- **Cache-on-error narrowed to `body_too_large_for_inline` only.** First pass cached on every `!resolution.ok` branch and stamped a "cap exceeded" reason on every error's `body_inclusion`, which was wrong for `invalid_input` (e.g. `body_mode: 'inline'` on a binary response). Other resolution errors now surface as-is — no spurious cache entry, no `cache_id` in detail.
+- **`decodeBase64` rejects malformed input loudly.** `Buffer.from(s, 'base64')` does not throw — it silently strips invalid characters. Strict alphabet/length validation (`^[A-Za-z0-9+/]*={0,2}$` + length divisible by 4 + `typeof` guard) added before decoding, so genuinely-bad `content_base64` returns `invalid_input` instead of a degraded buffer.
+- **`decodeBase64` pre-decode size guard.** Encoded length is checked against `ceil(cap/3)*4 + slack` BEFORE `Buffer.from` allocates — a 1 GB syntactically-valid base64 string would otherwise OOM before the post-decode cap check.
+- **Path guard on multipart files tightened.** Schema-bypass payloads like `{content_base64: "...", path: null}` previously reached `realpathSync(null)` and crashed; now the guard uses `typeof file.path !== 'string'` and falls through to the inline branch.
+- **`inferNextStepHints` no longer emits invalid jq for non-identifier keys.** Keys with hyphens, leading digits, or spaces produced parse errors when interpolated into `.foo` or `{foo}` shorthand. Identifier-safe filter added; non-identifier keys are skipped from projection shorthand or rendered with bracket-quoted form `."weird-key"` for path access. Bracket-quoted form strips the entire ASCII control range (`\x00-\x1F` plus `\x7F`), not just CR/LF/TAB/NUL.
+- **Multipart `oneOf` variants gain `additionalProperties: false`.** Closes the schema-level hole where `{path, content_base64}` and similar mixtures could match a variant unchanged.
+- **`writeWithBackpressure` races `drain` against `error`/`close`.** Awaiting only `drain` meant a disk-full / EPERM during backpressure left the request hung forever. Three-way race with cleanup of unused listeners.
+- **Redirect 301/302/303 method downgrade now drops ALL `content-*` headers**, not just `content-type` and `content-length`. Closes `content-encoding` / `content-language` / `content-md5` leaks across the redirect.
+
+### Changed
+- **`meta.body_inclusion.inline_cap_bytes` → `inline_body_cap_bytes`** (and same key in `error.detail` on `body_too_large_for_inline`). Now matches the env var (`MAGPIE_INLINE_BODY_CAP`) and the `server_info.effective_limits.inline_body_cap_bytes` field. Wire-level rename — safe right now (0 installs).
+- **README reorganised.** Per-client install snippets (Claude Desktop, Claude Code, VS Code `.vscode/mcp.json`, Cursor, Cline, Windsurf, Docker) replace the v0.1 TL;DR. New `body_mode` modes table, `server_info` debug callout, `content_base64` upload example, full env-var refresh, and a "How much context does this actually save?" table with approximate savings on GitHub Issues / Stripe Charges / OpenWeather forecast.
+- **npm-downloads badge** added to the badge row.
+
+### Spec
+- `MAX_RESPONSE_BYTES` → `MAGPIE_MAX_RESPONSE_BYTES` in §6 and §9.
+- `body_inclusion` shape example: `inline_cap_bytes` → `inline_body_cap_bytes` to match the wire format.
+- Literal `|` escaped inside the markdown table cell for the `next_step_hints` Object-with-array-fields sample.
+- Run-modes matrix entry for `multipart.files[].content_base64` reads "works (zero-volume Docker)" instead of "n/a", consistent with the §8.2 copy that promotes Docker for the inline-payload path.
+- Comment fix in `src/core/paths.ts` describing why root='/' needs the short-circuit.
+
 ## 0.2.0 — 2026-05-10
 
 Agent-UX bundle. Breaks the public API on one parameter (`include_body` → `body_mode`). Zero migration cost in practice (no installed v0.1.x users this early), so we took the rename window before usage solidifies. Adds three orthogonal capabilities (`head` mode preview, `next_step_hints`, `server_info` debug tool) plus the `content_base64` multipart payload mode that closes remote-MCP file asymmetry. Pre-bundle hardening pass closes 16 issues from the Copilot audit (header injection, cache_id randomness, symlink-resolved path validation, redirect method downgrade, more).

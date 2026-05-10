@@ -170,4 +170,16 @@ describe('buildMultipart', () => {
             }),
         ).toThrow(/must be a string/)
     })
+
+    it('rejects oversized base64 BEFORE allocating the decoded buffer', () => {
+        // Default cap is 10 MB. A 20 M-char string would decode to ~15 MB —
+        // the pre-decode length check should fire on encoded-size before
+        // Buffer.from allocates anything.
+        const tooLong = 'A'.repeat(20_000_000)
+        expect(() =>
+            buildMultipart({
+                files: { f: { content_base64: tooLong, filename: 'big.bin' } },
+            }),
+        ).toThrow(/encoded size .* implies decoded > MAGPIE_MAX_INLINE_FILE_BYTES/)
+    })
 })

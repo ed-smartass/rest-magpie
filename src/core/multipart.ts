@@ -63,6 +63,25 @@ const decodeBase64 = (s: unknown, where: string, capBytes: number): Buffer => {
         ;(e as { kind?: string }).kind = 'invalid_input'
         throw e
     }
+    // Cheap length-based pre-check BEFORE allocating the decoded buffer.
+    // base64 expands ~4/3 vs raw bytes (4 chars per 3 bytes), so the
+    // largest legal encoded length for our cap is ceil(cap/3)*4 + slack
+    // for padding. Reject otherwise — a 1 GB base64 string would OOM
+    // before the post-decode cap check otherwise.
+    const maxEncodedLength = Math.ceil(capBytes / 3) * 4 + 4
+    if (s.length > maxEncodedLength) {
+        const e = new Error(
+            'invalid_input: ' +
+                where +
+                ' encoded size ' +
+                s.length +
+                ' chars implies decoded > MAGPIE_MAX_INLINE_FILE_BYTES (' +
+                capBytes +
+                ' B). Use multipart.files[].path with a volume mount instead, or raise the cap.',
+        )
+        ;(e as { kind?: string }).kind = 'invalid_input'
+        throw e
+    }
     if (s.length % 4 !== 0 || !BASE64_RE.test(s)) {
         const e = new Error('invalid_input: ' + where + ' is not valid base64')
         ;(e as { kind?: string }).kind = 'invalid_input'
