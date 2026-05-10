@@ -11,13 +11,14 @@
 <p align="center">
   <a href="https://github.com/ed-smartass/rest-magpie/actions/workflows/ci.yml"><img src="https://github.com/ed-smartass/rest-magpie/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://www.npmjs.com/package/rest-magpie"><img src="https://img.shields.io/npm/v/rest-magpie?color=cb3837" alt="npm"></a>
+  <a href="https://www.npmjs.com/package/rest-magpie"><img src="https://img.shields.io/npm/dw/rest-magpie?color=cb3837&label=downloads" alt="npm downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/ed-smartass/rest-magpie" alt="MIT"></a>
   <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-compatible-6f42c1" alt="MCP"></a>
 </p>
 
 ---
 
-> Your agent burned 12K tokens on a 200KB JSON response — to read one field. Again.
+> Your agent just burned **12K tokens** on a 200KB JSON response — to read one field. **With rest-magpie: ~250 tokens** for the same field. Same call, ~50× less context.
 
 `rest-magpie` is an MCP server that wraps arbitrary REST API calls so your agent **first sees a compact schema**, then pulls **only what it asked for** through a jq mask. Big responses stay out of context until you actually need a slice.
 
@@ -25,19 +26,14 @@
   <a href="https://ed-smartass.github.io/rest-magpie/"><strong>→ Live demo</strong></a>
 </p>
 
-## TL;DR
+## Use it in
 
-- **`http_request`** runs the call, caches the body, returns the **structure**, not the bytes.
-- **`http_read`** pulls fields out of the cached body via `jq`.
-- **`http_inspect`** re-renders the schema in another format — no second HTTP call.
+Drop the snippet for your client into its MCP config. The desktop / IDE clients all spawn `npx -y rest-magpie` under the hood; the wrapping JSON differs slightly per client. Docker is an alternative wrapper for any of them — see the last entry.
 
----
+<details>
+<summary><strong>Claude Desktop</strong> — <code>claude_desktop_config.json</code></summary>
 
-## Install
-
-**npm (recommended):**
 ```jsonc
-// claude_desktop_config.json or any MCP-compatible client config
 {
   "mcpServers": {
     "rest-magpie": {
@@ -48,7 +44,87 @@
 }
 ```
 
-**Docker:**
+Config file lives at `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows). Restart Claude Desktop after editing.
+</details>
+
+<details>
+<summary><strong>Claude Code</strong> — one CLI command</summary>
+
+```sh
+claude mcp add rest-magpie -- npx -y rest-magpie
+```
+
+Or edit `~/.claude.json` (user scope) / `.mcp.json` (project scope) directly with the same `mcpServers` shape as Claude Desktop.
+</details>
+
+<details>
+<summary><strong>VS Code</strong> — <code>.vscode/mcp.json</code></summary>
+
+```jsonc
+{
+  "servers": {
+    "rest-magpie": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "rest-magpie"]
+    }
+  }
+}
+```
+
+VS Code uses `servers` (not `mcpServers`) and requires `type`. Workspace-scoped — commit it for your team.
+</details>
+
+<details>
+<summary><strong>Cursor</strong> — <code>~/.cursor/mcp.json</code> or <code>.cursor/mcp.json</code></summary>
+
+```jsonc
+{
+  "mcpServers": {
+    "rest-magpie": {
+      "command": "npx",
+      "args": ["-y", "rest-magpie"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>Cline</strong> — VS Code extension settings</summary>
+
+```jsonc
+{
+  "mcpServers": {
+    "rest-magpie": {
+      "command": "npx",
+      "args": ["-y", "rest-magpie"]
+    }
+  }
+}
+```
+
+Cline stores this in `cline_mcp_settings.json` (open from the Cline panel → MCP Servers → Configure).
+</details>
+
+<details>
+<summary><strong>Windsurf</strong> — <code>~/.codeium/windsurf/mcp_config.json</code></summary>
+
+```jsonc
+{
+  "mcpServers": {
+    "rest-magpie": {
+      "command": "npx",
+      "args": ["-y", "rest-magpie"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>Docker</strong> (any client) — same-path bind mount</summary>
+
 ```jsonc
 {
   "mcpServers": {
@@ -70,6 +146,16 @@
 ```
 
 The same-path bind mount is the recommended Docker pattern — agent paths translate transparently. Drop `MAGPIE_FILES_ROOT` if you want no path constraint (and you're sure about the security tradeoffs).
+</details>
+
+## What you get
+
+- **`http_request`** runs the call, caches the body, returns the **structure**, not the bytes.
+- **`http_read`** pulls fields out of the cached body via `jq`.
+- **`http_inspect`** re-renders the schema in another format — no second HTTP call.
+- **`server_info`** debug helper — version, runtime, effective env limits.
+
+One MCP install replaces every `curl` your agent would run, so you authorize once at config time instead of approving each call.
 
 ## Run modes & file paths
 
@@ -79,13 +165,13 @@ The same-path bind mount is the recommended Docker pattern — agent paths trans
 |---|---|---|
 | **npx (default)** | The MCP server runs on the same machine as your agent. | Simplest setup. Paths are local to your host — what the agent passes is what the server sees. |
 | **Docker** | You want isolation, or are running the server alongside other tooling in containers. | Paths are local to the container. Use the same-path bind mount + `MAGPIE_FILES_ROOT` pattern (above) so agent paths "just work" without translation. |
-| **Remote MCP** (over HTTP / SSE) | The server runs on shared infrastructure separate from the agent. | **Surprising default:** any path you pass for `multipart.files[].path`, `download_to`, or `save_to` resolves on the *server*, not the agent's filesystem. That's almost never what you want. Until v0.2 ships an inline file payload (`content_base64`), keep file-touching tools to npx/Docker mode. |
+| **Remote MCP** (over HTTP / SSE) | The server runs on shared infrastructure separate from the agent. | **Surprising default:** any path you pass for `multipart.files.<name>.path`, `download_to`, or `save_to` resolves on the *server*, not the agent's filesystem. For uploads, pass `multipart.files.<name>.content_base64` instead (since v0.2) — the bytes travel inline in the JSON-RPC frame, no path semantics involved. Downloads still don't have an inline-base64 mode; keep `download_to` to npx/Docker. |
 
 ### Where do file paths resolve?
 
 | Field | npx | Docker | Remote MCP |
 |---|---|---|---|
-| `multipart.files[].path` | host (agent's) | container — use same-path mount | server's filesystem |
+| `multipart.files.<name>.path` | host (agent's) | container — use same-path mount | server's filesystem |
 | `download_to` | host (agent's) | container — use same-path mount | server's filesystem |
 | `save_to` (in `http_read`) | host (agent's) | container — use same-path mount | server's filesystem |
 
@@ -97,13 +183,51 @@ Multipart uploads stream files via **chunked transfer encoding** (no `Content-Le
 
 ## Tools
 
-> **Default flow:** call `http_request` to get a schema + `cache_id`, then call `http_read` with a jq mask to extract only what you need. Keeps your context small even on multi-MB responses. Setting `include_body: true` is rarely the right call — see the tool description for cost framing.
+> **Default flow:** call `http_request` to get a schema + `cache_id`, then call `http_read` with a jq mask to extract only what you need. Keeps your context small even on multi-MB responses. Setting `body_mode: "inline"` is rarely the right call — see [body modes](#body-modes) for cost framing.
 
 | Tool | What it does |
 |---|---|
-| `http_request` | Run an HTTP request; cache the body; return a schema (and optionally the body for small responses). |
+| `http_request` | Run an HTTP request; return a schema (and optionally a preview / full body, governed by `body_mode`). The body is cached for `http_read`, except when `download_to` streams it straight to disk. |
 | `http_read` | Read a cached body, optionally filtered by a `jq` mask. Required for binaries (use `save_to`). |
 | `http_inspect` | Re-render the cached body's schema in another format — no second HTTP call. |
+| `server_info` | Debug helper. No params. Returns version, runtime, `MAGPIE_FILES_ROOT`, and every effective limit. |
+
+### Body modes
+
+`http_request` returns a schema by default. The `body_mode` parameter controls how much (if any) of the actual body comes back inline:
+
+| Mode | Returns | When to use |
+|---|---|---|
+| `schema` | schema only | You will follow up with `http_read` + a jq mask. |
+| `head` | schema + `body_preview` (arrays/strings truncated, `_truncated` markers) | You want a quick peek to decide what to extract next. |
+| `inline` | schema + the full body | You know the response is small and you need every field. Capped by `MAGPIE_INLINE_BODY_CAP` (256 KB default). |
+| `auto` *(default)* | server picks based on byte thresholds | Inline under `MAGPIE_INLINE_THRESHOLD_BYTES` (8 KB), head up to `MAGPIE_HEAD_PREVIEW_THRESHOLD` (64 KB), schema beyond that. |
+
+The actual mode picked, and the thresholds in effect, come back on every response in `meta.body_inclusion` so the agent can introspect what `auto` resolved to. JSON responses also get `next_step_hints` — advisory jq mask suggestions inferred from the top-level shape.
+
+### Debugging unexpected behaviour: `server_info`
+
+When a path is rejected with `invalid_input`, or a tool behaves differently than you'd expect (Docker vs. host mode, a stale env var, the wrong version), call `server_info` first. It returns:
+
+```jsonc
+{
+  "version": "0.2.0",
+  "runtime": "docker" /* or "npx" / "unknown" */,
+  "cwd": "/app",
+  "files_root": "/home/me/data",          // null if MAGPIE_FILES_ROOT is unset
+  "effective_limits": {
+    "default_timeout_ms": 30000,
+    "max_response_bytes": 52428800,
+    "inline_threshold_bytes": 8192,
+    "head_preview_threshold_bytes": 65536,
+    "inline_body_cap_bytes": 262144,
+    "max_inline_file_bytes": 10485760,
+    /* …10 more fields… */
+  }
+}
+```
+
+No params. Cheap to call. Beats guessing why a path rejection said "/home/me/data" when you swore you set `MAGPIE_FILES_ROOT=/data`.
 
 ## Schema formats
 
@@ -200,6 +324,22 @@ http_request {
 }
 ```
 
+For remote-MCP setups (or any time a server-side path makes no sense), use the inline variant — bytes travel in the JSON-RPC frame, no `MAGPIE_FILES_ROOT` constraint applies:
+
+```
+http_request {
+  method: "POST",
+  url: "https://upload.example.com/photos",
+  multipart: { files: { photo: {
+    content_base64: "<base64 bytes>",
+    filename: "photo.jpg",
+    content_type: "image/jpeg"
+  } } }
+}
+```
+
+Inline payloads are capped at `MAGPIE_MAX_INLINE_FILE_BYTES` (10 MB pre-base64 by default).
+
 ### 4. Stream a binary download to disk
 
 ```
@@ -220,14 +360,31 @@ All env vars are optional. Defaults match common-sense limits.
 | `MAGPIE_DEFAULT_TIMEOUT_MS` | 30000 | per-request HTTP timeout |
 | `MAGPIE_MAX_RESPONSE_BYTES` | 52428800 | hard cap on cached body size (50 MB) |
 | `MAGPIE_CACHE_TTL_SECONDS` | 600 | cache entry lifetime (10 min) |
-| `MAGPIE_AUTO_INCLUDE_BODY_BYTES` | 8192 | threshold for `include_body: "auto"` |
+| `MAGPIE_INLINE_THRESHOLD_BYTES` | 8192 | `body_mode: "auto"` upgrades to `inline` below this |
+| `MAGPIE_HEAD_PREVIEW_THRESHOLD` | 65536 | `body_mode: "auto"` upgrades to `head` below this; otherwise `schema` |
+| `MAGPIE_HEAD_PREVIEW_ITEMS` | 5 | array items kept verbatim in `body_preview` (rest collapsed) |
+| `MAGPIE_HEAD_PREVIEW_STRING` | 200 | string truncation length in `body_preview` |
+| `MAGPIE_INLINE_BODY_CAP` | 262144 | hard cap on `body_mode: "inline"` (256 KB) |
+| `MAGPIE_MAX_INLINE_FILE_BYTES` | 10485760 | hard cap on `multipart.files.<name>.content_base64` (10 MB pre-base64) |
 | `MAGPIE_JQ_TIMEOUT_MS` | 5000 | per-mask jq timeout |
-| `MAGPIE_USE_NATIVE_JQ` | 0 | switch to subprocess jq (reserved, not heavily exercised in v0.1) |
+| `MAGPIE_USE_NATIVE_JQ` | 0 | switch to subprocess jq (reserved, not heavily exercised) |
 | `MAGPIE_TLS_INSECURE` | 0 | skip TLS verification |
 | `MAGPIE_SCHEMA_MAX_DEPTH` | 10 | recursion depth for schema renderers |
 | `MAGPIE_SCHEMA_MAX_OBJECT_KEYS` | 200 | per-object key cap |
 | `MAGPIE_SCHEMA_SAMPLE_MAX_STRING` | 100 | string truncation in samples |
-| `MAGPIE_FILES_ROOT` | _(unset)_ | restricts `multipart.files[].path`, `download_to`, and `save_to` to canonical paths under this prefix; unset means no constraint |
+| `MAGPIE_FILES_ROOT` | _(unset)_ | restricts `multipart.files.<name>.path`, `download_to`, and `save_to` to canonical paths under this prefix; unset means no constraint. Does **not** apply to `multipart.files.<name>.content_base64` (no path involved) |
+
+## How much context does this actually save?
+
+Approximate token costs for a single agent turn that wants *one slice* of a real-world API response. Tokenizer-dependent (Anthropic Claude tokens, English-heavy JSON, ~4 chars/token); your numbers will vary by ±30%.
+
+| Endpoint | Raw response | Raw tokens | Magpie schema | Magpie tokens | Savings |
+|---|---:|---:|---:|---:|---:|
+| GitHub Issues — `GET /repos/X/Y/issues` (page of 30) | ~200 KB | ~12 000 | ~1 KB | ~250 | **~48×** |
+| Stripe Charges — `GET /v1/charges?limit=10` | ~80 KB | ~5 000 | ~0.6 KB | ~150 | **~33×** |
+| OpenWeather — `GET /data/2.5/forecast` (5 day / 3 h, 40 entries) | ~30 KB | ~2 000 | ~0.5 KB | ~120 | **~17×** |
+
+Once the agent has the schema, `http_read {cache_id, mask: "..."}` returns just the slice — typically a handful of tokens.
 
 ## Compared to alternatives
 
@@ -239,7 +396,7 @@ All env vars are optional. Defaults match common-sense limits.
 | Schema-first responses | ✅ | ❌ | ❌ |
 | Field filtering (jq) | ✅ | ❌ | manual |
 | Doesn't dump 200KB into agent context | ✅ | ❌ | ❌ |
-| Single permission grant | ✅ | ✅ | ❌ |
+| Single permission grant (no per-call prompt) | ✅ | ✅ | ❌ |
 
 ## License
 
