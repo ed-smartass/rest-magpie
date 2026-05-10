@@ -125,6 +125,21 @@ describe('http_request tool', () => {
         }
     })
 
+    it('empty + auto resolves to inline (per spec §4)', async () => {
+        server.use(
+            http.get(
+                'https://api.test/empty',
+                () => new Response(null, { status: 204, headers: { 'content-type': '' } }),
+            ),
+        )
+        const cache = new Cache(60)
+        const r = await httpRequestTool({ method: 'GET', url: 'https://api.test/empty' }, cache)
+        if (isError(r)) throw new Error('unexpected error: ' + r.error.message)
+        expect(r.meta.body_kind).toBe('empty')
+        expect(r.meta.body_inclusion.resolved_mode).toBe('inline')
+        expect(r.body).toBeNull()
+    })
+
     it('errors body_too_large_for_inline when explicit inline > cap, surfaces cache_id, body retrievable', async () => {
         process.env.MAGPIE_INLINE_BODY_CAP = '10'
         resetConfigCache()

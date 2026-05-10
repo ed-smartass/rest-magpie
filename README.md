@@ -211,7 +211,7 @@ When a path is rejected with `invalid_input`, or a tool behaves differently than
 
 ```jsonc
 {
-  "version": "0.2.0",
+  "version": "0.2.1",
   "runtime": "docker" /* or "npx" / "unknown" */,
   "cwd": "/app",
   "files_root": "/home/me/data",          // null if MAGPIE_FILES_ROOT is unset

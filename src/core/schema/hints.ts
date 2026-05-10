@@ -73,11 +73,27 @@ export const inferNextStepHints = (parsed: unknown): string[] => {
         if (arrFields.length > 0) {
             const f = arrFields[0]!
             const fAccess = dotKey(f)
+            const arr = parsed[f] as unknown[]
+            const isObjArr = isObjectArray(arr)
             const otherSafe = sample(
                 Object.keys(parsed).filter((k) => k !== f && isJqIdent(k)),
                 2,
             )
-            const hints = [fAccess + ' | length', fAccess + '[:5]', fAccess + ' | map({id, name})']
+            const hints = [fAccess + ' | length', fAccess + '[:5]']
+            if (isObjArr) {
+                // Pick a couple of identifier-safe keys from the first object
+                // so the projection compiles for any-shape array.
+                const firstObj = arr[0] as Record<string, unknown>
+                const safeKeys = sample(Object.keys(firstObj).filter(isJqIdent), 2)
+                if (safeKeys.length >= 2) {
+                    hints.push(fAccess + ' | map({' + safeKeys.join(', ') + '})')
+                } else if (safeKeys.length === 1) {
+                    hints.push(fAccess + ' | map({' + safeKeys[0] + '})')
+                }
+            } else if (arr.length > 0) {
+                // Scalar array — `map({id, name})` would be nonsense.
+                hints.push(fAccess + ' | unique')
+            }
             if (otherSafe.length > 0) {
                 hints.push('. | { ' + otherSafe.join(', ') + ' }')
             }

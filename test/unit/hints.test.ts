@@ -64,4 +64,20 @@ describe('inferNextStepHints', () => {
         expect(hints).toContain('keys')
         expect(hints.every((h) => !h.includes('a-b') && !h.includes('2x'))).toBe(true)
     })
+
+    it('does NOT emit map({id, name}) for scalar-valued array fields', () => {
+        // For { data: [1,2,3] } the projection is nonsense — would crash jq.
+        // Should suggest `unique` instead.
+        const hints = inferNextStepHints({ data: [1, 2, 3] })
+        expect(hints).toContain('.data | length')
+        expect(hints).toContain('.data | unique')
+        expect(hints.every((h) => !h.includes('map({'))).toBe(true)
+    })
+
+    it('emits map({safe_keys}) for object-valued array fields with mixed-safety keys', () => {
+        const hints = inferNextStepHints({ data: [{ id: 1, 'weird-key': 2, name: 'a' }] })
+        // Only id + name go into the projection shorthand; weird-key skipped.
+        expect(hints.some((h) => h.includes('map({id, name})'))).toBe(true)
+        expect(hints.every((h) => !h.includes('weird-key'))).toBe(true)
+    })
 })

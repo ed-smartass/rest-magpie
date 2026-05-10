@@ -1,17 +1,41 @@
 import { existsSync, realpathSync } from 'node:fs'
-import { resolve, sep } from 'node:path'
+import { basename, dirname, join, parse, resolve, sep } from 'node:path'
 import type { ErrorEnvelope } from '../types.js'
 import { makeError } from './errors.js'
 
-// Resolve a path through symlinks where possible. If the path doesn't exist
-// (common: a download_to target that hasn't been created yet), fall back to
-// lexical resolve. This matters for security: a symlink pointing outside
-// MAGPIE_FILES_ROOT could otherwise sneak past a lexical-only check.
+// Resolve a path through symlinks. If the full path doesn't exist (common:
+// a download_to target that hasn't been created yet), walk UP to the nearest
+// existing ancestor, realpath that ancestor, then re-attach the remaining
+// (non-existent) tail. This closes a security hole where lexical fallback
+// would let `<root>/symlinked-dir/new.txt` escape MAGPIE_FILES_ROOT — the
+// symlink ancestor was never resolved, so `startsWith(root + sep)` lied.
+//
+// Use path.dirname/basename + path.parse(cur).root for the loop bound so the
+// implementation works on POSIX and Windows (incl. UNC and drive roots like
+// `C:\`) — manual `lastIndexOf(sep)` does the wrong thing on `C:\tmp`.
 const canonicalize = (p: string): string => {
+    const abs = resolve(p)
     try {
-        return realpathSync(p)
+        return realpathSync(abs)
     } catch {
-        return resolve(p)
+        const root = parse(abs).root // '/' on POSIX; 'C:\\' or '\\\\srv\\share\\' on Windows
+        const tail: string[] = []
+        let cur = abs
+        for (;;) {
+            const parent = dirname(cur)
+            tail.unshift(basename(cur))
+            try {
+                const realParent = realpathSync(parent)
+                return join(realParent, ...tail)
+            } catch {
+                if (parent === cur || parent === root) {
+                    // Hit the filesystem root without finding any existing
+                    // ancestor (very unusual). Fall back to the lexical path.
+                    return abs
+                }
+                cur = parent
+            }
+        }
     }
 }
 

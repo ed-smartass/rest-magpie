@@ -214,7 +214,7 @@ After tag pushes successfully, go to GitHub → Releases → Draft new release �
 ```markdown
 # Changelog
 
-## 0.2.0 — 2026-06-15
+## X.Y.Z — YYYY-MM-DD
 
 ### Added
 - `node-jq` native engine via `MAGPIE_USE_NATIVE_JQ=1`.

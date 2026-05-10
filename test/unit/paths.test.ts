@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { __setRuntimeForTests, ensureUnderRoot, isUnderRoot } from '../../src/core/paths.js'
 
@@ -45,6 +48,31 @@ describe('isUnderRoot', () => {
         expect(isUnderRoot('/etc/passwd', '/')).toBe(true)
         expect(isUnderRoot('/home/user/file', '/')).toBe(true)
         expect(isUnderRoot('/', '/')).toBe(true)
+    })
+
+    it('rejects non-existent path inside symlinked-out parent (FILES_ROOT bypass)', () => {
+        // Set up: <root>/escape -> <outside>. Then candidate = <root>/escape/new.txt
+        // which doesn't yet exist. The lexical-fallback canonicalize would have
+        // accepted it (string starts with root), letting a write land outside.
+        const tmp = mkdtempSync(join(tmpdir(), 'magpie-paths-'))
+        const root = join(tmp, 'root')
+        const outside = join(tmp, 'outside')
+        mkdirSync(root)
+        mkdirSync(outside)
+        symlinkSync(outside, join(root, 'escape'))
+        const candidate = join(root, 'escape', 'new.txt') // does NOT exist
+        expect(isUnderRoot(candidate, root)).toBe(false)
+    })
+
+    it('accepts non-existent path inside genuinely-under-root parent', () => {
+        // Counterpart sanity check: the new logic must still allow legitimate
+        // download_to / save_to targets that don't yet exist.
+        const tmp = mkdtempSync(join(tmpdir(), 'magpie-paths-'))
+        const root = join(tmp, 'root')
+        mkdirSync(root)
+        mkdirSync(join(root, 'sub'))
+        const candidate = join(root, 'sub', 'will-create-this.bin')
+        expect(isUnderRoot(candidate, root)).toBe(true)
     })
 })
 
